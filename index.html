@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#14161a">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icono.svg" type="image/svg+xml">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Control TV</title>
+<style>
+  :root { --bg:#14161a; --btn:#252931; --btn2:#2f3440; --txt:#e8eaed; --acc:#6c3fd1; --red:#c0392b; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none; }
+  html,body { margin:0; background:var(--bg); color:var(--txt); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  .wrap { max-width:420px; margin:0 auto; padding:16px 18px 40px; }
+  .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+  .estado { font-size:13px; opacity:.7; flex:1; text-align:center; padding:0 10px; line-height:1.3; }
+  .estado.err { color:#ff7b6b; opacity:1; }
+  button { background:var(--btn); color:var(--txt); border:none; border-radius:14px; font-size:16px;
+           padding:0; height:56px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;
+           transition:transform .06s, background .1s; touch-action:manipulation; }
+  button:active, button.on { transform:scale(.94); background:var(--btn2); }
+  .row { display:grid; gap:12px; margin-bottom:12px; }
+  .c2 { grid-template-columns:1fr 1fr; } .c3 { grid-template-columns:1fr 1fr 1fr; }
+  .power { background:var(--red); width:56px; border-radius:50%; font-size:22px; }
+  .pad { position:relative; width:260px; height:260px; margin:12px auto 18px; border-radius:50%; background:var(--btn); }
+  .pad button { position:absolute; background:transparent; width:80px; height:80px; font-size:26px; border-radius:50%; }
+  .pad button:active { background:var(--btn2); }
+  .pad .up{top:0;left:90px} .pad .down{bottom:0;left:90px} .pad .left{left:0;top:90px} .pad .right{right:0;top:90px}
+  .pad .ok { top:70px; left:70px; width:120px; height:120px; background:var(--acc); font-weight:700; font-size:20px; }
+  .pad .ok:active { background:#7d52e0; }
+  .modo { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:14px; background:var(--btn); border-radius:14px; padding:4px; }
+  .modo button { height:40px; background:transparent; font-size:15px; }
+  .modo button.act { background:var(--acc); }
+  .tvonly { display:none; }
+  body.tv .tvonly { display:grid; }
+  /* Modo basico: oculta lo que hoy no funciona (control directo de la TV y volumen via Roku) */
+  body.basico .modo, body.basico .tvonly, body.basico .volbox { display:none !important; }
+  .conn { font-size:12px; text-align:center; margin:-6px 0 12px; opacity:.75; }
+  .conn.ok { color:#6fcf97; } .conn.mal { color:#ff7b6b; opacity:1; }
+  .vol { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:12px; }
+  .lbl { font-size:12px; opacity:.6; text-align:center; margin:4px 0 8px; letter-spacing:.08em; text-transform:uppercase; }
+  .txt { display:flex; gap:8px; margin:6px 0 16px; }
+  .txt input { flex:1; background:var(--btn); color:var(--txt); border:none; border-radius:12px; padding:0 14px; font-size:16px; height:48px; user-select:text; -webkit-user-select:text; }
+  .txt button { height:48px; padding:0 16px; background:var(--acc); }
+  .apps { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .apps button { height:auto; aspect-ratio:3/2; padding:0; overflow:hidden; background:#000; }
+  .apps img { width:100%; height:100%; object-fit:contain; }
+  details summary { cursor:pointer; padding:10px 0; opacity:.8; }
+  small.help { display:block; opacity:.5; font-size:12px; margin-top:20px; line-height:1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <button class="power" data-k="Power" title="Encender/Apagar">⏻</button>
+    <span class="estado" id="estado">Listo</span>
+    <button style="width:56px" data-k="Home" title="Inicio">🏠</button>
+  </div>
+
+  <div class="conn" id="conn">● Conectando…</div>
+
+  <div class="modo" id="modo">
+    <button data-modo="roku">📦 Roku</button>
+    <button data-modo="tv">📺 TV (ajustes)</button>
+  </div>
+
+  <div class="row c3 tvonly">
+    <button data-k="TV:MENU">☰ Menú</button>
+    <button data-k="TV:SOURCE">⮕ Fuente</button>
+    <button data-k="TV:EXIT">✕ Salir</button>
+  </div>
+
+  <div class="row c3">
+    <button data-k="Back">↩ Atrás</button>
+    <button data-k="Info">✱ Opciones</button>
+    <button data-k="Search">🔍 Buscar</button>
+  </div>
+
+  <div class="pad">
+    <button class="up" data-k="Up" data-rep>▲</button>
+    <button class="left" data-k="Left" data-rep>◀</button>
+    <button class="ok" data-k="Select">OK</button>
+    <button class="right" data-k="Right" data-rep>▶</button>
+    <button class="down" data-k="Down" data-rep>▼</button>
+  </div>
+
+  <div class="row c3">
+    <button data-k="Rev" data-rep>⏪</button>
+    <button data-k="Play">⏯</button>
+    <button data-k="Fwd" data-rep>⏩</button>
+  </div>
+
+  <div class="volbox">
+    <div class="lbl">Volumen TV</div>
+    <div class="vol">
+      <button data-k="VolumeDown" data-rep>🔉 −</button>
+      <button data-k="VolumeMute">🔇</button>
+      <button data-k="VolumeUp" data-rep>🔊 +</button>
+    </div>
+  </div>
+
+  <div class="row c3">
+    <button data-k="InstantReplay">↺ Repetir</button>
+    <button data-k="PowerOff">Apagar</button>
+    <button data-k="PowerOn">Encender</button>
+  </div>
+
+  <div class="lbl">Escribir texto (búsquedas, contraseñas)</div>
+  <div class="txt">
+    <input id="texto" placeholder="Escribe aquí..." autocomplete="off">
+    <button id="enviar">Enviar</button>
+  </div>
+  <div class="row c2">
+    <button data-k="Backspace">⌫ Borrar</button>
+    <button data-k="Enter">⏎ Enter</button>
+  </div>
+
+  <details id="detApps">
+    <summary>📺 Aplicaciones</summary>
+    <div class="apps" id="apps"></div>
+  </details>
+
+  <small class="help">
+    Controla el Roku por WiFi: el celular y el PC con el servidor deben estar en la misma red.
+    Esta TV no acepta volumen ni encendido por red, así que esos botones están ocultos.
+    Mantén presionadas las flechas para repetir.
+  </small>
+</div>
+
+<script>
+const estado = document.getElementById('estado');
+function setEstado(t, err) { estado.textContent = t; estado.className = 'estado' + (err ? ' err' : ''); }
+
+// Pon HABILITAR_TV = true si algun dia la TV acepta comandos (ver servidor.py, /tv/key/...).
+const HABILITAR_TV = false;
+if (!HABILITAR_TV) { document.body.classList.add('basico'); localStorage.setItem('modo', 'roku'); }
+
+// Indicador de conexion con el servidor (mismo WiFi + PC encendido).
+const conn = document.getElementById('conn');
+let enLinea = null;
+async function revisarConexion() {
+  let ok = false;
+  try { ok = (await fetch('/ping', { cache: 'no-store' })).ok; } catch {}
+  if (ok !== enLinea) {
+    enLinea = ok;
+    conn.textContent = ok ? '● Conectado' : '● Sin conexión: revisa que el celular esté en el mismo WiFi y el PC encendido';
+    conn.className = 'conn ' + (ok ? 'ok' : 'mal');
+  }
+}
+revisarConexion(); setInterval(revisarConexion, 4000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) revisarConexion(); });
+
+// Modo "TV": las teclas van directo a la TV (protocolo Vestel Smart Center) en vez de al Roku.
+const TV_MAP = { Up:'UP', Down:'DOWN', Left:'LEFT', Right:'RIGHT', Select:'OK', Back:'BACK', Home:'HOME',
+  VolumeUp:'VOL_UP', VolumeDown:'VOL_DOWN', VolumeMute:'MUTE', Power:'POWER', Info:'INFO',
+  Rev:'REWIND', Fwd:'FORWARD', Play:'PLAY' };
+let modo = localStorage.getItem('modo') === 'tv' ? 'tv' : 'roku';
+function aplicarModo() {
+  document.body.classList.toggle('tv', modo === 'tv');
+  document.querySelectorAll('[data-modo]').forEach(b => b.classList.toggle('act', b.dataset.modo === modo));
+}
+document.querySelectorAll('[data-modo]').forEach(b => b.addEventListener('click', () => {
+  modo = b.dataset.modo; localStorage.setItem('modo', modo); aplicarModo();
+  setEstado(modo === 'tv' ? 'Modo TV: teclas directas a la TV' : 'Modo Roku');
+}));
+aplicarModo();
+
+async function key(k) {
+  if (navigator.vibrate) navigator.vibrate(15);
+  let url, destino = 'el Roku';
+  if (k.startsWith('TV:')) { url = '/tv/key/' + k.slice(3); destino = 'la TV'; }
+  else if (modo === 'tv') {
+    if (!TV_MAP[k]) { setEstado('Ese botón no existe en modo TV', true); return; }
+    url = '/tv/key/' + TV_MAP[k]; destino = 'la TV';
+  } else url = '/key/' + k;
+  try {
+    const r = await fetch(url, { method: 'POST' });
+    if (!r.ok) throw new Error(destino === 'la TV' ? await r.text() : '');
+    setEstado('✓ ' + k.replace('TV:', ''));
+  } catch (e) { setEstado(e.message || ('Sin conexión con ' + destino), true); }
+}
+
+document.querySelectorAll('[data-k]').forEach(b => {
+  const k = b.dataset.k, rep = b.hasAttribute('data-rep');
+  let t1, t2;
+  const stop = () => { clearTimeout(t1); clearInterval(t2); b.classList.remove('on'); };
+  b.addEventListener('pointerdown', e => {
+    e.preventDefault(); b.classList.add('on'); key(k);
+    if (rep) t1 = setTimeout(() => { t2 = setInterval(() => key(k), 180); }, 450);
+  });
+  ['pointerup','pointerleave','pointercancel'].forEach(ev => b.addEventListener(ev, stop));
+  b.addEventListener('contextmenu', e => e.preventDefault());
+});
+
+const inp = document.getElementById('texto');
+async function enviarTexto() {
+  const t = inp.value; if (!t) return;
+  setEstado('Enviando texto...');
+  try {
+    const r = await fetch('/text?t=' + encodeURIComponent(t), { method: 'POST' });
+    if (!r.ok) throw 0;
+    inp.value = ''; setEstado('✓ Texto enviado');
+  } catch { setEstado('Error al enviar texto', true); }
+}
+document.getElementById('enviar').addEventListener('click', enviarTexto);
+inp.addEventListener('keydown', e => { if (e.key === 'Enter') enviarTexto(); });
+
+let appsCargadas = false;
+document.getElementById('detApps').addEventListener('toggle', async e => {
+  if (!e.target.open || appsCargadas) return;
+  const cont = document.getElementById('apps');
+  cont.textContent = 'Cargando...';
+  try {
+    const xml = new DOMParser().parseFromString(await (await fetch('/apps')).text(), 'text/xml');
+    cont.textContent = '';
+    xml.querySelectorAll('app').forEach(a => {
+      const b = document.createElement('button');
+      b.title = a.textContent;
+      const img = document.createElement('img');
+      img.src = '/icon/' + a.getAttribute('id'); img.alt = a.textContent; img.loading = 'lazy';
+      b.appendChild(img);
+      b.addEventListener('click', () => { fetch('/launch/' + a.getAttribute('id'), { method: 'POST' }); setEstado('Abriendo ' + a.textContent); });
+      cont.appendChild(b);
+    });
+    appsCargadas = true;
+  } catch { cont.textContent = 'No se pudieron cargar las apps'; }
+});
+</script>
+</body>
+</html>

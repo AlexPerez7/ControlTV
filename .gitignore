@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+# IPs de tu red local (se regeneran al arrancar)
+roku_ip.txt
+tv_ip.txt
+# Si algun dia se generan certificados o claves
+*.pem
+*.key
