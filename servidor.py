@@ -64,6 +64,10 @@ def escanear() -> int:
     nuevos = {id_de(d): d for d in dispositivos.descubrir(IP_LOCAL)}
     nuevos.update({id_de(d): d for d in manuales()})
     with LOCK:
+        conocidos = dict(DEVICES)
+    for k, d in nuevos.items():  # lento (red): fuera del lock, sobre la instancia que se va a conservar
+        conocidos.get(k, d).preparar()
+    with LOCK:
         for k, d in nuevos.items():  # conserva el estado (volumen, mute) de los ya conocidos
             DEVICES.setdefault(k, d)
         for k in [k for k in DEVICES if k not in nuevos]:

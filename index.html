@@ -38,6 +38,7 @@
   body.c-keys .row.cap-keys, body.c-text .row.cap-text { display:grid; }
   body.c-keys .cap-keys.pad { display:block; }
   body.c-text .txt.cap-text { display:flex; }
+  body:not(.c-keys) .solo-keys { visibility:hidden; }  /* ocultos sin mover el resto de la barra */
   .volnum { text-align:center; font-size:13px; opacity:.7; margin:-2px 0 10px; }
   .conn { font-size:12px; text-align:center; margin:-6px 0 12px; opacity:.75; }
   .conn.ok { color:#6fcf97; } .conn.mal { color:#ff7b6b; opacity:1; }
@@ -56,9 +57,9 @@
 <body>
 <div class="wrap">
   <div class="top">
-    <button class="power" data-k="Power" title="Encender/Apagar">⏻</button>
+    <button class="power solo-keys" data-k="Power" title="Encender/Apagar">⏻</button>
     <span class="estado" id="estado">Listo</span>
-    <button style="width:56px" data-k="Home" title="Inicio">🏠</button>
+    <button class="solo-keys" style="width:56px" data-k="Home" title="Inicio">🏠</button>
   </div>
 
   <div class="conn" id="conn">● Conectando…</div>
@@ -213,11 +214,14 @@ async function key(k) {
 
 document.querySelectorAll('[data-k]').forEach(b => {
   const k = b.dataset.k, rep = b.hasAttribute('data-rep');
-  let t1, t2;
+  let t1, t2, enCurso = false;
+  // Al mantener pulsado no se manda otra tecla hasta que vuelva la anterior: si la TV va lenta no se acumulan
+  // y deja de moverse al soltar.
+  const pulsar = () => { if (enCurso) return; enCurso = true; key(k).finally(() => { enCurso = false; }); };
   const stop = () => { clearTimeout(t1); clearInterval(t2); b.classList.remove('on'); };
   b.addEventListener('pointerdown', e => {
-    e.preventDefault(); b.classList.add('on'); key(k);
-    if (rep) t1 = setTimeout(() => { t2 = setInterval(() => key(k), 180); }, 450);
+    e.preventDefault(); b.classList.add('on'); pulsar();
+    if (rep) t1 = setTimeout(() => { t2 = setInterval(pulsar, 180); }, 450);
   });
   ['pointerup','pointerleave','pointercancel'].forEach(ev => b.addEventListener(ev, stop));
   b.addEventListener('contextmenu', e => e.preventDefault());

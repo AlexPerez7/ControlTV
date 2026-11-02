@@ -58,7 +58,7 @@ final class AndroidTV extends Driver {
         APPS.put("Spotify", "spotify://");
     }
 
-    private Boolean pareado;                  // null = sin comprobar
+    private volatile boolean pareado;         // lo fija preparar() al escanear y el emparejamiento
     private SSLSocket sock;
     private volatile boolean listo;
     private final Object envio = new Object();
@@ -68,9 +68,12 @@ final class AndroidTV extends Driver {
 
     @Override String marca() { return "Android TV"; }
 
-    @Override synchronized String[] caps() {
-        if (pareado == null) pareado = comprobarPareado();
+    @Override String[] caps() {  // sin red: no bloquea /devices
         return pareado ? new String[] {"keys", "apps"} : new String[] {"pair"};
+    }
+
+    @Override void preparar() {
+        if (!pareado) pareado = comprobarPareado();
     }
 
     static AndroidTV probe(String ip) {
@@ -283,7 +286,7 @@ final class AndroidTV extends Driver {
         }
         cerrar(s);
         pairSock = null;
-        pareado = null;  // se vuelve a comprobar
+        pareado = true;
     }
 
     // ---- control -------------------------------------------------------------------------
@@ -328,7 +331,6 @@ final class AndroidTV extends Driver {
 
     private SSLSocket asegurarConexion() throws Exception {
         if (sock != null && listo) return sock;
-        if (Boolean.FALSE.equals(pareado)) throw new DriverError("Falta emparejar esta TV");
         listo = false;
         final SSLSocket s;
         try {
@@ -344,7 +346,7 @@ final class AndroidTV extends Driver {
         if (!listo) {
             sock = null;
             cerrar(s);
-            pareado = null;
+            pareado = false;
             throw new DriverError("La TV no acepto la conexion: vuelve a emparejarla");
         }
         return s;

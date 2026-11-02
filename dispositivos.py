@@ -65,6 +65,9 @@ class Driver:
     def pair(self, arg: str):
         raise DriverError("Este dispositivo no necesita emparejarse")
 
+    def preparar(self):
+        """Comprobaciones lentas por red que se hacen al escanear (fuera del lock del servidor)."""
+
 
 # --- Roku (ECP, puerto 8060) -----------------------------------------------------
 class Roku(Driver):
@@ -355,10 +358,12 @@ class AndroidTV(Driver):
         self._pair_sock = None
 
     @property
-    def caps(self):
-        if self._paired is None:
-            self._paired = self._comprobar_pareado()
+    def caps(self):  # sin red: el estado lo fija preparar() al escanear
         return ("keys", "apps") if self._paired else ("pair",)
+
+    def preparar(self):
+        if not self._paired:
+            self._paired = self._comprobar_pareado()
 
     @classmethod
     def probe(cls, ip):
@@ -487,7 +492,7 @@ class AndroidTV(Driver):
         except (OSError, ConnectionError, IndexError, ValueError) as e:
             raise DriverError(f"Fallo el emparejamiento: {e}")
         self._cerrar_pair()
-        self._paired = None  # se vuelve a comprobar
+        self._paired = True
 
     # -- control -------------------------------------------------------------
     def online(self):
@@ -530,8 +535,6 @@ class AndroidTV(Driver):
     def _asegurar_conexion(self):
         if self._sock is not None and self._listo.is_set():
             return self._sock
-        if self._paired is False:
-            raise DriverError("Falta emparejar esta TV")
         self._listo.clear()
         try:
             s = self._conectar(self.PUERTO_REMOTE)
@@ -542,7 +545,7 @@ class AndroidTV(Driver):
         if not self._listo.wait(6):
             self._sock = None
             s.close()
-            self._paired = None
+            self._paired = False
             raise DriverError("La TV no acepto la conexion: vuelve a emparejarla")
         return s
 

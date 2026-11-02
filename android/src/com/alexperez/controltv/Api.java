@@ -35,10 +35,21 @@ final class Api {
 
     private static final Response OK = new Response(200, "text/plain", new byte[0]);
 
-    synchronized int escanear() {
+    /** La red (descubrir, preparar) va fuera del lock: mientras escanea, las teclas siguen funcionando. */
+    int escanear() {
         List<Driver> nuevos = Discovery.descubrir();
         Map<String, Driver> mapa = new LinkedHashMap<>();
         for (Driver d : nuevos) mapa.put(d.id(), d);
+        Map<String, Driver> conocidos;
+        synchronized (this) { conocidos = new LinkedHashMap<>(dispositivos); }
+        for (Map.Entry<String, Driver> e : mapa.entrySet()) {  // sobre la instancia que se va a conservar
+            Driver d = conocidos.get(e.getKey());
+            (d != null ? d : e.getValue()).preparar();
+        }
+        return fusionar(mapa);
+    }
+
+    private synchronized int fusionar(Map<String, Driver> mapa) {
         for (Map.Entry<String, Driver> e : mapa.entrySet()) {  // conserva el estado (volumen, mute) de los ya conocidos
             if (!dispositivos.containsKey(e.getKey())) dispositivos.put(e.getKey(), e.getValue());
         }
@@ -49,8 +60,14 @@ final class Api {
 
     private synchronized Driver buscar(String id) { return dispositivos.get(id); }
 
-    private synchronized JSONArray fichas() throws Exception {
-        if (!escaneado) escanear();
+    private JSONArray fichas() throws Exception {
+        boolean falta;
+        synchronized (this) { falta = !escaneado; }
+        if (falta) escanear();
+        return listar();
+    }
+
+    private synchronized JSONArray listar() throws Exception {
         JSONArray a = new JSONArray();
         for (Driver d : dispositivos.values()) a.put(d.ficha());
         return a;

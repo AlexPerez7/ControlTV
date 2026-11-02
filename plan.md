@@ -82,6 +82,79 @@ Se extrajo y analizo con REA (`rea`, JADX) lo que hay en el movil; ningun protoc
 - [ ] Mantener la pantalla encendida mientras se usa el control, y mostrar la app activa (`/query/active-app`).
 - [ ] Probar en el celular la instalación en pantalla de inicio (con HTTP puede abrirse con la barra del navegador).
 
+## Mejoras propuestas (análisis del código, nov 2026)
+
+Prioridad: **A** = arreglo o mejora con mucho impacto y poco trabajo, **B** = conviene, **C** = idea a futuro.
+Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda de contenido...) no se repite aquí.
+
+### Errores y robustez
+- [x] **A** · (hecho: `preparar()` al escanear; en la app el escaneo tampoco bloquea las teclas) `/devices` puede congelar todo el servidor: `ficha()` lee `d.caps` dentro de `with LOCK`, y en `AndroidTV.caps`
+      eso abre una conexión TLS (hasta 3 s) si no se sabe aún si está emparejada. Mientras tanto ninguna otra petición avanza.
+      Igual en la app (`Api.fichas()` y `AndroidTV.caps()` son `synchronized`). Solución: comprobar el emparejamiento durante
+      el escaneo (fuera del lock) y que `caps` solo lea el valor guardado.
+- [x] **A** · (hecho: clase `solo-keys`) Los botones de arriba (⏻ y 🏠) no tienen clase `cap-keys`: se ven también en la Hisense, que no admite teclas,
+      y al pulsarlos sale error. Ocultarlos igual que el resto.
+- [x] **A** · (hecho) Al mantener pulsada una flecha se manda una tecla cada 180 ms sin esperar la respuesta anterior: si la TV va lenta
+      se acumulan peticiones y la TV sigue moviéndose después de soltar. No mandar la siguiente hasta que vuelva la anterior.
+- [ ] **B** · Android TV (Python): `_sock`/`_listo` se modifican desde dos hilos sin lock; el socket de emparejamiento queda
+      abierto para siempre si el usuario no escribe el código. Añadir un lock y cerrar el pairing a los ~2 min.
+- [ ] **B** · Los IDs de dispositivo dependen de la IP (`android-tv-192-168-31-108`): si el router cambia la IP, la web olvida
+      el dispositivo elegido. Usar un dato fijo (MAC, número de serie, `udn`) o reservar IPs en el router.
+- [ ] **B** · `online()` existe en todos los drivers pero nadie lo usa: el indicador "● Conectado" solo comprueba el servidor,
+      no la TV. Usarlo para un punto verde/rojo por dispositivo en el selector.
+- [ ] **C** · La app Android ignora `dispositivos.json` (los agregados a mano, como la onn); permitir agregarlos desde la app.
+
+### Rendimiento
+- [ ] **A** · Escaneo del servidor: los `probe` se hacen uno tras otro por IP (cada uno espera hasta 1,5-2 s). Hacerlos en
+      paralelo (ThreadPoolExecutor, como ya hace `puerto_abierto`) y lanzar SSDP y el barrido de puertos a la vez: de ~10 s a ~3 s.
+- [ ] **B** · Roku: cada tecla y cada letra del texto abren una conexión HTTP nueva. Reutilizar la conexión
+      (`http.client.HTTPConnection` con keep-alive) baja la latencia y acelera mucho el envío de texto.
+- [ ] **B** · App Android: `Discovery` prueba los puertos de cada IP uno tras otro (8060, 56790, 6466 → hasta 1,2 s por IP).
+      Probarlos a la vez, o empezar por las IPs que responden a SSDP/mDNS.
+- [ ] **C** · Guardar la lista de dispositivos del último escaneo y mostrarla al instante al abrir la web/app, y reescanear en
+      segundo plano.
+
+### Diseño del código
+- [ ] **B** · La lógica de los drivers está duplicada en Python y Java (teclas, enlaces de apps, protocolos). Pasar los datos
+      (mapas de teclas, enlaces de apps) a un `drivers.json` común que `build.sh` copie a los assets, para cambiarlos en un solo sitio.
+- [ ] **B** · La app lleva dentro la clave privada de `androidtv.p12`: cualquiera con el APK podría usar el emparejamiento.
+      Alternativa: generar la clave en el **Android Keystore** de cada celular (crea su propio certificado autofirmado) y
+      emparejar una vez por celular. Así el APK no lleva secretos.
+- [ ] **B** · Pruebas mínimas sin dependencias (`python -m unittest`): codificar/decodificar protobuf, el hash del pairing con un
+      ejemplo conocido y el parseo de respuestas de Roku/Hisense. Hoy un error ahí solo se ve probando con la TV.
+- [ ] **C** · Borrar `servidor.ps1` (obsoleto) y que `Iniciar Control TV.bat` no dependa de la ruta fija de Python 3.12
+      (usar `py -3` o `python` del PATH).
+- [ ] **C** · El servidor acepta comandos de cualquier equipo del WiFi y de cualquier página web abierta en un navegador de la red
+      (un `fetch` desde otra web llega igual). Comprobar la cabecera `Origin` y, opcional, un PIN.
+
+### UI y UX
+- [ ] **A** · Botones por dispositivo: cada driver podría declarar las teclas que soporta y la web ocultar el resto
+      (p. ej. "↺ Repetir" o "Encender" no sirven en todas las TV).
+- [ ] **A** · Emparejamiento: al pulsar "Mostrar código", enfocar el campo del código, aceptar minúsculas y emparejar solo al
+      escribir el 6.º carácter. Mostrar el nombre de la TV.
+- [ ] **B** · Nombre real de la TV: hoy la Caixun sale como "Android TV". La propia TV lo envía al conectar (`remote_configure`
+      trae fabricante y modelo) y también responde en `http://IP:8008/setup/eureka_info`.
+- [ ] **B** · Apps sin icono en Android TV y Hisense: usar iconos/colores propios (SVG pequeños en la web) en lugar de texto.
+- [ ] **B** · Pulsación larga real: en Android TV mandar `START_LONG`/`END_LONG` al mantener OK (abre menús contextuales),
+      en vez de repetir pulsaciones cortas.
+- [ ] **B** · Gestos: zona táctil para deslizar (como la app Google TV) como alternativa a las flechas.
+- [ ] **C** · Accesibilidad: `user-scalable=no` impide hacer zoom y los botones con solo emoji no tienen `aria-label`.
+- [ ] **C** · Diseño horizontal/tablet (hoy la columna mide como máximo 420 px) y tema claro.
+
+### Funciones nuevas
+- [ ] **A** · Android TV: **volumen visible**. La TV envía por la misma conexión el nivel, el máximo y el mute
+      (`remote_set_volume_level`); con eso se activa la capacidad `volume` y se ve el número como en la Hisense.
+- [ ] **A** · App Android: **botones de volumen del celular** controlan la TV elegida (`onKeyDown` de VOLUME_UP/DOWN).
+- [ ] **B** · Android TV: **escribir texto** (mensaje `remote_ime_batch_edit`), para búsquedas y contraseñas.
+- [ ] **B** · App Android: **"Compartir con Control TV"**: compartir un video de YouTube desde el celular y que se abra en la TV
+      (filtro de intents `SEND` + `launch` con el enlace).
+- [ ] **B** · Más teclas en Android TV: entrada/fuente (`KEYCODE_TV_INPUT`), ajustes, canal +/-, teclado numérico.
+- [ ] **B** · Encender por red: **Wake-on-LAN** (la MAC se puede sacar de la tabla ARP durante el escaneo) para TV que apagan el
+      WiFi en reposo.
+- [ ] **C** · App Android: widget o mosaico de ajustes rápidos con Pausa, Volumen y Silencio, sin abrir la app.
+- [ ] **C** · Atajos: secuencias guardadas (p. ej. "Noche": abrir YouTube y bajar el volumen) y acciones a todas las TV a la vez
+      (silenciar todo).
+
 ## Cómo se usa
 
 1. Ejecutar `Iniciar Control TV.bat` (detecta los dispositivos de la red al arrancar; el boton "Buscar" de la web vuelve a escanear).

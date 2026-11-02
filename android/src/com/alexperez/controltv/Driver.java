@@ -35,6 +35,8 @@ abstract class Driver {
     void launch(String appId) throws Exception { throw new DriverError("Este dispositivo no admite abrir apps"); }
     Net.Resp icon(String appId) throws Exception { throw new DriverError("Sin iconos"); }
     JSONObject estado() throws Exception { return new JSONObject(); }
+    /** Comprobaciones lentas por red que se hacen al escanear (fuera de cualquier lock). */
+    void preparar() { }
     void pair(String arg) throws Exception { throw new DriverError("Este dispositivo no necesita emparejarse"); }
 
     static String slug(String s) {
