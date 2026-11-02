@@ -97,7 +97,7 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
 - [x] **A** · (hecho) Al mantener pulsada una flecha se manda una tecla cada 180 ms sin esperar la respuesta anterior: si la TV va lenta
       se acumulan peticiones y la TV sigue moviéndose después de soltar. No mandar la siguiente hasta que vuelva la anterior.
 - [ ] **B** · Android TV (Python): `_sock`/`_listo` se modifican desde dos hilos sin lock; el socket de emparejamiento queda
-      abierto si el usuario no escribe el código. (Hecho: el código caduca a los 2 min. Falta el lock de `_sock`/`_listo`.)
+      abierto si el usuario no escribe el código. (Hecho: el código caduca a los 2 min. Hecho también el lock de `_sock`/`_listo`: una conexión vieja ya no apaga la señal de una nueva.)
 - [ ] **B** · Los IDs de dispositivo dependen de la IP (`android-tv-192-168-31-108`): si el router cambia la IP, la web olvida
       el dispositivo elegido. Usar un dato fijo (MAC, número de serie, `udn`) o reservar IPs en el router.
 - [x] **B** · (hecho: `GET /d/<id>/online`, ● / ○ en el selector cada 10 s) `online()` existe en todos los drivers pero nadie lo usa: el indicador "● Conectado" solo comprueba el servidor,
@@ -134,7 +134,7 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
       escribir el 6.º carácter. Mostrar el nombre de la TV.
 - [x] **B** · (hecho: `:8008/setup/eureka_info` → "AiPlus2K") Nombre real de la TV: hoy la Caixun sale como "Android TV". La propia TV lo envía al conectar (`remote_configure`
       trae fabricante y modelo) y también responde en `http://IP:8008/setup/eureka_info`.
-- [ ] **B** · Apps sin icono en Android TV y Hisense: usar iconos/colores propios (SVG pequeños en la web) en lugar de texto.
+- [x] **B** · (hecho a medias: botones con el color de cada app; faltan logos SVG) Apps sin icono en Android TV y Hisense: usar iconos/colores propios (SVG pequeños en la web) en lugar de texto.
 - [ ] **B** · Pulsación larga real: en Android TV mandar `START_LONG`/`END_LONG` al mantener OK (abre menús contextuales),
       en vez de repetir pulsaciones cortas.
 - [ ] **B** · Gestos: zona táctil para deslizar (como la app Google TV) como alternativa a las flechas.
@@ -148,7 +148,7 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
 - [ ] **B** · Android TV: **escribir texto** (mensaje `remote_ime_batch_edit`), para búsquedas y contraseñas.
 - [ ] **B** · App Android: **"Compartir con Control TV"**: compartir un video de YouTube desde el celular y que se abra en la TV
       (filtro de intents `SEND` + `launch` con el enlace).
-- [ ] **B** · Más teclas en Android TV: entrada/fuente (`KEYCODE_TV_INPUT`), ajustes, canal +/-, teclado numérico.
+- [x] **B** · (hecho, sin probar en la TV: panel "Más botones" con Fuente, Ajustes, Menú, Guía, CH +/− y números) Más teclas en Android TV: entrada/fuente (`KEYCODE_TV_INPUT`), ajustes, canal +/-, teclado numérico.
 - [ ] **B** · Encender por red: **Wake-on-LAN** (la MAC se puede sacar de la tabla ARP durante el escaneo) para TV que apagan el
       WiFi en reposo.
 - [ ] **C** · App Android: widget o mosaico de ajustes rápidos con Pausa, Volumen y Silencio, sin abrir la app.

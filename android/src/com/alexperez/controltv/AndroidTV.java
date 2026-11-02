@@ -45,17 +45,27 @@ final class AndroidTV extends Driver {
 
     private static final Map<String, Integer> TECLAS = new HashMap<>();
     private static final Map<String, String> APPS = new LinkedHashMap<>();
+    private static final Map<String, String> COLORES = new HashMap<>();
     static {
         String[] k = {"Up", "Down", "Left", "Right", "Select", "Back", "Home", "Power", "PowerOff", "PowerOn",
-                "VolumeUp", "VolumeDown", "VolumeMute", "Play", "Rev", "Fwd", "Info", "Search", "Enter", "Backspace", "InstantReplay"};
-        int[] v = {19, 20, 21, 22, 23, 4, 3, 26, 223, 224, 24, 25, 164, 85, 89, 90, 165, 84, 66, 67, 88};
+                "VolumeUp", "VolumeDown", "VolumeMute", "Play", "Rev", "Fwd", "Info", "Search", "Enter", "Backspace", "InstantReplay",
+                "Source", "Settings", "Guide", "Menu", "ChannelUp", "ChannelDown"};
+        int[] v = {19, 20, 21, 22, 23, 4, 3, 26, 223, 224, 24, 25, 164, 85, 89, 90, 165, 84, 66, 67, 88,
+                178, 176, 172, 82, 166, 167};
         for (int i = 0; i < k.length; i++) TECLAS.put(k[i], v[i]);
+        for (int n = 0; n < 10; n++) TECLAS.put("Num" + n, 7 + n);  // KEYCODE_0..9
         APPS.put("YouTube", "vnd.youtube://");
         APPS.put("Netflix", "nflx://www.netflix.com");
         APPS.put("Prime Video", "https://app.primevideo.com");
         APPS.put("Disney+", "https://www.disneyplus.com");
         APPS.put("Max", "https://www.max.com");
         APPS.put("Spotify", "spotify://");
+        COLORES.put("YouTube", "#c4302b");
+        COLORES.put("Netflix", "#b20710");
+        COLORES.put("Prime Video", "#0a7bb5");
+        COLORES.put("Disney+", "#113ccf");
+        COLORES.put("Max", "#5822b4");
+        COLORES.put("Spotify", "#1a9c47");
     }
 
     private volatile boolean pareado;         // lo fija preparar() al escanear y el emparejamiento
@@ -406,7 +416,7 @@ final class AndroidTV extends Driver {
 
     @Override JSONArray apps() throws Exception {
         JSONArray a = new JSONArray();
-        for (String n : APPS.keySet()) a.put(new JSONObject().put("id", n).put("name", n).put("icon", false));
+        for (String n : APPS.keySet()) a.put(new JSONObject().put("id", n).put("name", n).put("icon", false).put("color", COLORES.get(n)));
         return a;
     }
 

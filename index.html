@@ -124,6 +124,24 @@
     </div>
   </div>
 
+  <details id="detMas" class="cap cap-keys" style="display:none">
+    <summary>⌨ Más botones</summary>
+    <div class="row c3">
+      <button data-k="Source">Fuente</button>
+      <button data-k="Settings">Ajustes</button>
+      <button data-k="Menu">Menú</button>
+      <button data-k="Guide">Guía</button>
+      <button data-k="ChannelUp" data-rep>CH +</button>
+      <button data-k="ChannelDown" data-rep>CH −</button>
+    </div>
+    <div class="row c3">
+      <button data-k="Num1">1</button><button data-k="Num2">2</button><button data-k="Num3">3</button>
+      <button data-k="Num4">4</button><button data-k="Num5">5</button><button data-k="Num6">6</button>
+      <button data-k="Num7">7</button><button data-k="Num8">8</button><button data-k="Num9">9</button>
+      <span></span><button data-k="Num0">0</button><span></span>
+    </div>
+  </details>
+
   <details id="detApps" class="cap cap-apps">
     <summary>📺 Aplicaciones</summary>
     <div class="apps" id="apps"></div>
@@ -166,6 +184,8 @@ function aplicarCaps() {
   // Si el dispositivo declara qué teclas admite, se ocultan los botones de las demás.
   const teclas = actual && actual.teclas;
   document.querySelectorAll('[data-k]').forEach(b => b.classList.toggle('sin-tecla', !!teclas && !teclas.includes(b.dataset.k)));
+  // El panel de fuente/canales/numeros solo existe en dispositivos que declaran esas teclas (hoy: Android TV)
+  document.getElementById('detMas').style.display = teclas && teclas.includes('Source') ? '' : 'none';
   appsCargadas = false; document.getElementById('apps').textContent = '';
   document.getElementById('detApps').open = false;
   document.getElementById('volnum').textContent = '';
@@ -298,7 +318,7 @@ document.getElementById('detApps').addEventListener('toggle', async e => {
         const img = document.createElement('img');
         img.src = '/d/' + id + '/icon/' + a.id; img.alt = a.name; img.loading = 'lazy';
         b.appendChild(img);
-      } else { b.textContent = a.name; b.style.background = 'var(--btn)'; b.style.fontSize = '14px'; }
+      } else { b.textContent = a.name; b.style.background = a.color || 'var(--btn)'; b.style.fontSize = '14px'; b.style.fontWeight = '600'; }
       b.addEventListener('click', async () => {
         const r = await fetch('/d/' + id + '/launch/' + encodeURIComponent(a.id), { method: 'POST' });
         setEstado(r.ok ? 'Abriendo ' + a.name : await r.text(), !r.ok);

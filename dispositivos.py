@@ -205,7 +205,8 @@ class Hisense(Driver):
         for nombre in self.APPS_DIAL:
             try:
                 _http(f"http://{self.ip}:56789/apps/{nombre}", timeout=2)
-                res.append({"id": nombre, "name": nombre, "icon": False})
+                res.append({"id": nombre, "name": nombre, "icon": False,
+                            "color": {"YouTube": "#c4302b", "Netflix": "#b20710"}.get(nombre)})
             except Exception:
                 pass
         return res
@@ -350,7 +351,9 @@ class AndroidTV(Driver):
     TECLAS = {"Up": 19, "Down": 20, "Left": 21, "Right": 22, "Select": 23, "Back": 4, "Home": 3,
               "Power": 26, "PowerOff": 223, "PowerOn": 224, "VolumeUp": 24, "VolumeDown": 25,
               "VolumeMute": 164, "Play": 85, "Rev": 89, "Fwd": 90, "Info": 165, "Search": 84,
-              "Enter": 66, "Backspace": 67, "InstantReplay": 88}
+              "Enter": 66, "Backspace": 67, "InstantReplay": 88,
+              "Source": 178, "Settings": 176, "Guide": 172, "Menu": 82, "ChannelUp": 166, "ChannelDown": 167,
+              **{f"Num{n}": 7 + n for n in range(10)}}
     APPS = {"YouTube": "vnd.youtube://", "Netflix": "nflx://www.netflix.com",
             "Prime Video": "https://app.primevideo.com", "Disney+": "https://www.disneyplus.com",
             "Max": "https://www.max.com", "Spotify": "spotify://"}
@@ -362,6 +365,7 @@ class AndroidTV(Driver):
         self._sock = None
         self._listo = threading.Event()
         self._envio = threading.Lock()
+        self._conn = threading.RLock()  # protege _sock/_listo (varias peticiones HTTP a la vez)
         self._pair_sock = None
         self._pair_desde = 0.0  # cuando se mostro el codigo en la TV (caduca a los 2 min)
         self._vol = None  # (nivel, maximo, silenciado) segun la ultima notificacion de la TV
@@ -549,34 +553,36 @@ class AndroidTV(Driver):
         except (OSError, ConnectionError, IndexError):
             pass
         finally:
-            self._listo.clear()
+            with self._conn:
+                if self._sock is s:  # una conexion vieja no debe apagar la senal de una nueva
+                    self._sock = None
+                    self._listo.clear()
             try:
                 s.close()
             except OSError:
                 pass
-            if self._sock is s:
-                self._sock = None
 
     def _enviar(self, s, datos):
         with self._envio:
             self._enviar_msg(s, datos)
 
     def _asegurar_conexion(self):
-        if self._sock is not None and self._listo.is_set():
-            return self._sock
-        self._listo.clear()
-        try:
-            s = self._conectar(self.PUERTO_REMOTE)
-        except OSError:
-            raise DriverError(f"{self.nombre} no responde (¿esta encendida?)")
-        self._sock = s
-        threading.Thread(target=self._lector, args=(s,), daemon=True).start()
-        if not self._listo.wait(6):
-            self._sock = None
-            s.close()
-            self._paired = False
-            raise DriverError("La TV no acepto la conexion: vuelve a emparejarla")
-        return s
+        with self._conn:
+            if self._sock is not None and self._listo.is_set():
+                return self._sock
+            self._listo.clear()
+            try:
+                s = self._conectar(self.PUERTO_REMOTE)
+            except OSError:
+                raise DriverError(f"{self.nombre} no responde (¿esta encendida?)")
+            self._sock = s
+            threading.Thread(target=self._lector, args=(s,), daemon=True).start()
+            if not self._listo.wait(6):
+                self._sock = None
+                s.close()
+                self._paired = False
+                raise DriverError("La TV no acepto la conexion: vuelve a emparejarla")
+            return s
 
     def _mandar(self, datos):
         for intento in (0, 1):
@@ -585,8 +591,10 @@ class AndroidTV(Driver):
                 self._enviar(s, datos)
                 return
             except OSError:
-                self._sock = None
-                self._listo.clear()
+                with self._conn:
+                    if self._sock is s:
+                        self._sock = None
+                        self._listo.clear()
                 if intento:
                     raise DriverError(f"{self.nombre} no responde")
 
@@ -606,8 +614,11 @@ class AndroidTV(Driver):
         nivel, maximo, mute = self._vol
         return {"volume": nivel, "max": maximo, "muted": mute}
 
+    COLORES = {"YouTube": "#c4302b", "Netflix": "#b20710", "Prime Video": "#0a7bb5", "Disney+": "#113ccf",
+               "Max": "#5822b4", "Spotify": "#1a9c47"}
+
     def apps(self):
-        return [{"id": n, "name": n, "icon": False} for n in self.APPS]
+        return [{"id": n, "name": n, "icon": False, "color": self.COLORES.get(n)} for n in self.APPS]
 
     def launch(self, app_id):
         if app_id not in self.APPS:

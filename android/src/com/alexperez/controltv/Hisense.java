@@ -94,7 +94,7 @@ final class Hisense extends Driver {
         for (String n : APPS_DIAL) {
             try {
                 Net.get("http://" + ip + ":56789/apps/" + n, 2000);
-                res.put(new JSONObject().put("id", n).put("name", n).put("icon", false));
+                res.put(new JSONObject().put("id", n).put("name", n).put("icon", false).put("color", n.equals("YouTube") ? "#c4302b" : "#b20710"));
             } catch (Exception ignorado) { /* la app no esta disponible en esta TV */ }
         }
         return res;
