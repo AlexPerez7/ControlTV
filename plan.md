@@ -197,3 +197,4 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
 3. El celular y el PC deben estar en el mismo WiFi.
 
 - **Primera tecla perdida (corregido)**: la TV crea un control virtual (uinput `virtual-remote`) por conexion; una tecla enviada justo al conectar se perdia (p. ej. Ajustes "no hacia nada" la primera vez). Ahora se espera 0,4 s tras conectar. Ajustes (176) funciona: el receptor `GlobalKeyReceiver` de la TV abre `com.android.tv.settings`. Diagnostico con ADB: `logcat | grep GlobalKey` y `getevent -lt` para ver que manda el control fisico.
+- **Menu y CH-**: Menu (82) abre el menu de la TV en la entrada TV; en el inicio y en YouTube no hace nada (esperado). CH- sin efecto en la Caixun, tampoco con el control fisico (no hay canales sintonizados): no se puede verificar. Numeros 0-9 verificados con getevent (KEY_0..KEY_9).
