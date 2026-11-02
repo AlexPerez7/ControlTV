@@ -151,6 +151,41 @@ class Emparejamiento(unittest.TestCase):
             tv.key_hold("Inventada", "start")
         self.assertEqual(tv.enviados, [])
 
+    def test_texto_a_teclas(self):
+        # h o l a, espacio, 1 2 3: KEYCODE_H=36, O=43, L=40, A=29, SPACE=62, 1=8, 2=9, 3=10
+        codigos, omitidos = d.AndroidTV.teclas_de_texto("hola 123")
+        self.assertEqual(codigos, [36, 43, 40, 29, 62, 8, 9, 10])
+        self.assertEqual(omitidos, "")
+
+    def test_texto_mayusculas_y_tildes(self):
+        a, _ = d.AndroidTV.teclas_de_texto("Ñandú Á")
+        b, _ = d.AndroidTV.teclas_de_texto("nandu a")
+        self.assertEqual(a, b)
+
+    def test_texto_omite_lo_que_no_se_puede(self):
+        codigos, omitidos = d.AndroidTV.teclas_de_texto("¿qué? ¡hola!😀")
+        self.assertEqual(omitidos, "¿?¡!😀")
+        self.assertEqual(codigos, d.AndroidTV.teclas_de_texto("que hola")[0])
+
+    def test_texto_se_envia_tecla_a_tecla(self):
+        tv = self.tv_capturando()
+        tv.PAUSA_TECLA = 0
+        tv.text("ab 1")
+        self.assertEqual(tv.enviados, [self.inyeccion_codigo(29), self.inyeccion_codigo(30),
+                                       self.inyeccion_codigo(62), self.inyeccion_codigo(8)])
+        self.assertEqual(tv.omitidos("ab 1"), "")
+
+    def inyeccion_codigo(self, code):
+        return d._pb((10, d._pb((1, code), (2, 3))))
+
+    def test_texto_sin_nada_escribible_o_muy_largo(self):
+        tv = self.tv_capturando()
+        with self.assertRaisesRegex(d.DriverError, "Ningun caracter"):
+            tv.text("¿?!")
+        with self.assertRaisesRegex(d.DriverError, "demasiado largo"):
+            tv.text("a" * 201)
+        self.assertEqual(tv.enviados, [])
+
     def test_teclas_desconocidas(self):
         with self.assertRaisesRegex(d.DriverError, "no disponible"):
             self.tv().key("Inventada")

@@ -38,6 +38,9 @@ abstract class Driver {
     /** Abre un enlace (p. ej. un video compartido) en el dispositivo. */
     void abrir(String url) throws Exception { throw new DriverError("Este dispositivo no admite abrir enlaces"); }
 
+    /** Caracteres de `t` que text() no puede escribir en este dispositivo ("" si escribe todo). */
+    String omitidos(String t) { return ""; }
+
     /** True si admite mantener una tecla (keyHold). */
     boolean largo() { return false; }
 

@@ -317,9 +317,11 @@ async function enviarTexto() {
   setEstado('Enviando texto...');
   try {
     const r = await fetch('/d/' + actual.id + '/text?t=' + encodeURIComponent(t), { method: 'POST' });
-    if (!r.ok) throw 0;
-    inp.value = ''; setEstado('✓ Texto enviado');
-  } catch { setEstado('Error al enviar texto', true); }
+    if (!r.ok) throw new Error(await r.text());
+    inp.value = '';
+    const aviso = r.status === 200 ? await r.text() : '';  // 200 = se escribió, pero se omitieron caracteres
+    setEstado(aviso ? '✓ Texto enviado. ' + aviso : '✓ Texto enviado', !!aviso);
+  } catch (e) { setEstado(e.message || 'Error al enviar texto', true); }
 }
 document.getElementById('enviar').addEventListener('click', enviarTexto);
 inp.addEventListener('keydown', e => { if (e.key === 'Enter') enviarTexto(); });

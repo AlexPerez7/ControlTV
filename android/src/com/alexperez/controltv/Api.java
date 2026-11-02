@@ -114,7 +114,12 @@ final class Api {
                     if (modo.isEmpty()) d.key(arg); else d.keyHold(arg, modo);
                     return OK;
                 }
-                if (accion.equals("text")) { d.text(consulta(query, "t")); return OK; }
+                if (accion.equals("text")) {
+                    String t = consulta(query, "t");
+                    d.text(t);
+                    String om = d.omitidos(t);  // 200 con aviso: se escribio lo posible
+                    return om.isEmpty() ? OK : texto(200, "Se omitieron: " + om);
+                }
                 if (accion.equals("launch") && arg != null) { d.launch(arg); return OK; }
                 if (accion.equals("pair") && arg != null) { d.pair(arg); return OK; }
                 if (accion.equals("open")) { d.abrir(consulta(query, "u")); return OK; }

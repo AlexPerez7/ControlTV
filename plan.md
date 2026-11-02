@@ -148,7 +148,7 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
 - [x] **A** · (hecho: la Caixun ahora tenia sin botones de volumen) Android TV: **volumen visible**. La TV envía por la misma conexión el nivel, el máximo y el mute
       (`remote_set_volume_level`); con eso se activa la capacidad `volume` y se ve el número como en la Hisense.
 - [x] **A** · (hecho y probado en la Caixun) App Android: **botones de volumen del celular** controlan la TV elegida (`onKeyDown` de VOLUME_UP/DOWN).
-- [ ] **B** · Android TV: **escribir texto** (mensaje `remote_ime_batch_edit`), para búsquedas y contraseñas.
+- [x] **B** · (hecho como teclas, **sin probar en la TV**: solo minúsculas, números y `. , - = / ; ' @ +`; las tildes se quitan y se avisa de lo omitido. Falta la vía IME para mayúsculas/Unicode: requiere ver con la TV el mensaje `remote_ime_key_inject` (campo 20) para conocer los contadores) Android TV: **escribir texto** (mensaje `remote_ime_batch_edit`), para búsquedas y contraseñas.
 - [x] **B** · (hecho; el panel se vio bien en el celular, **falta probar el envío a la TV**: `vnd.youtube://<id>` con un id real) App Android: **"Compartir con Control TV"**: compartir un video de YouTube desde el celular y que se abra en la TV
       (filtro de intents `SEND` + `launch` con el enlace).
 - [x] **B** · (hecho, sin probar en la TV: panel "Más botones" con Fuente, Ajustes, Menú, Guía, CH +/− y números) Más teclas en Android TV: entrada/fuente (`KEYCODE_TV_INPUT`), ajustes, canal +/-, teclado numérico.

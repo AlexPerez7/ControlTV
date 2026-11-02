@@ -13,6 +13,7 @@ import ssl
 import subprocess
 import threading
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -49,6 +50,10 @@ class Driver:
 
     def key(self, k: str):
         raise DriverError("Este dispositivo no admite teclas")
+
+    def omitidos(self, t: str) -> str:
+        """Caracteres de `t` que `text()` no puede escribir en este dispositivo ("" si escribe todo)."""
+        return ""
 
     def key_hold(self, k: str, accion: str):
         """Mantener una tecla: accion "start" al pulsar y "end" al soltar."""
@@ -383,7 +388,7 @@ class AndroidTV(Driver):
 
     @property
     def caps(self):  # sin red: el estado lo fija preparar() al escanear
-        return ("keys", "volume", "apps", "link") if self._paired else ("pair",)
+        return ("keys", "volume", "text", "apps", "link") if self._paired else ("pair",)
 
     @property
     def teclas(self):
@@ -669,6 +674,44 @@ class AndroidTV(Driver):
         if app_id not in self.APPS:
             raise DriverError("App no soportada")
         self._mandar(_pb((90, _pb((1, self.APPS[app_id])))))
+
+    # Texto como teclas: KEYCODE_A..Z = 29..54, 0..9 = 7..16 y algunos signos sin Shift. Las mayusculas se escriben
+    # en minuscula y las tildes se quitan (buscar no las distingue); lo demas se omite y se avisa.
+    PUNTUACION = {" ": 62, ",": 55, ".": 56, "-": 69, "=": 70, "/": 76, ";": 74, "'": 75, "@": 77, "+": 81}
+    PAUSA_TECLA = 0.02  # segundos entre teclas, para que la TV no pierda ninguna
+    MAX_TEXTO = 200
+
+    @classmethod
+    def teclas_de_texto(cls, texto):
+        """(codigos de tecla, caracteres omitidos) para escribir `texto` como teclas."""
+        codigos, omitidos = [], []
+        for ch in unicodedata.normalize("NFD", texto):
+            if unicodedata.combining(ch):
+                continue
+            c = ch.lower()
+            if len(c) == 1 and "a" <= c <= "z":
+                codigos.append(29 + ord(c) - ord("a"))
+            elif len(c) == 1 and "0" <= c <= "9":
+                codigos.append(7 + int(c))
+            elif c in cls.PUNTUACION:
+                codigos.append(cls.PUNTUACION[c])
+            else:
+                omitidos.append(ch)
+        return codigos, "".join(dict.fromkeys(omitidos))
+
+    def omitidos(self, t):
+        return self.teclas_de_texto(t)[1]
+
+    def text(self, t):
+        if len(t) > self.MAX_TEXTO:
+            raise DriverError(f"Texto demasiado largo (maximo {self.MAX_TEXTO} caracteres)")
+        codigos, _ = self.teclas_de_texto(t)
+        if not codigos:
+            raise DriverError("Ningun caracter se puede escribir en esta TV (solo letras, numeros y . , - = / ; ' @ +)")
+        for i, code in enumerate(codigos):
+            if i:
+                time.sleep(self.PAUSA_TECLA)
+            self._mandar(_pb((10, _pb((1, code), (2, self.CORTA)))))
 
     _YOUTUBE = re.compile(r"(?:youtu\.be/|youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|live/|embed/))([A-Za-z0-9_-]{11})")
 

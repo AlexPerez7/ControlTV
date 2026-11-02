@@ -150,6 +150,9 @@ class Handler(BaseHTTPRequestHandler):
                 t = q.get("t", [""])[0]
                 d.text(t)
                 print(f"  {d.nombre}: texto {t!r}")
+                omitidos = d.omitidos(t)
+                if omitidos:  # 200 con aviso: se escribio lo posible
+                    return self.responder(200, f"Se omitieron: {omitidos}".encode())
                 return self.responder(204)
             if metodo == "POST" and accion == "open":
                 d.abrir(q.get("u", [""])[0])

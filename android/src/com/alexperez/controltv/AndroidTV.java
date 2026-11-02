@@ -82,7 +82,7 @@ final class AndroidTV extends Driver {
     @Override String marca() { return "Android TV"; }
 
     @Override String[] caps() {  // sin red: no bloquea /devices
-        return pareado ? new String[] {"keys", "volume", "apps", "link"} : new String[] {"pair"};
+        return pareado ? new String[] {"keys", "volume", "text", "apps", "link"} : new String[] {"pair"};
     }
 
     @Override String[] teclas() { return TECLAS.keySet().toArray(new String[0]); }
@@ -417,6 +417,47 @@ final class AndroidTV extends Driver {
     @Override void key(String k) throws Exception {
         if (!TECLAS.containsKey(k)) throw new DriverError("Tecla no disponible en esta TV");
         inyectar(k, CORTA);
+    }
+
+    // Texto como teclas: KEYCODE_A..Z = 29..54, 0..9 = 7..16 y algunos signos sin Shift. Las mayusculas se escriben en
+    // minuscula y las tildes se quitan (buscar no las distingue); lo demas se omite y se avisa.
+    private static final String PUNTUACION = " ,.-=/;'@+";
+    private static final int[] CODIGOS_PUNTUACION = {62, 55, 56, 69, 70, 76, 74, 75, 77, 81};
+    private static final long PAUSA_TECLA_MS = 20;  // para que la TV no pierda ninguna tecla
+    private static final int MAX_TEXTO = 200;
+
+    /** Escribe en `codigos` las teclas para `texto` y devuelve los caracteres que no se pueden escribir. */
+    static String teclasDeTexto(String texto, List<Integer> codigos) {
+        StringBuilder omitidos = new StringBuilder();
+        String nfd = java.text.Normalizer.normalize(texto, java.text.Normalizer.Form.NFD);
+        for (int i = 0; i < nfd.length(); ) {
+            int cp = nfd.codePointAt(i);
+            i += Character.charCount(cp);
+            if (Character.getType(cp) == Character.NON_SPACING_MARK) continue;  // tilde suelta
+            int c = Character.toLowerCase(cp);
+            int p = c < 128 ? PUNTUACION.indexOf((char) c) : -1;
+            if (c >= 'a' && c <= 'z') codigos.add(29 + c - 'a');
+            else if (c >= '0' && c <= '9') codigos.add(7 + c - '0');
+            else if (p >= 0) codigos.add(CODIGOS_PUNTUACION[p]);
+            else {
+                String ch = new String(Character.toChars(cp));
+                if (omitidos.indexOf(ch) < 0) omitidos.append(ch);
+            }
+        }
+        return omitidos.toString();
+    }
+
+    @Override String omitidos(String t) { return teclasDeTexto(t, new ArrayList<Integer>()); }
+
+    @Override void text(String t) throws Exception {
+        if (t.length() > MAX_TEXTO) throw new DriverError("Texto demasiado largo (maximo " + MAX_TEXTO + " caracteres)");
+        List<Integer> codigos = new ArrayList<>();
+        teclasDeTexto(t, codigos);
+        if (codigos.isEmpty()) throw new DriverError("Ningun caracter se puede escribir en esta TV (solo letras, numeros y . , - = / ; ' @ +)");
+        for (int i = 0; i < codigos.size(); i++) {
+            if (i > 0) Thread.sleep(PAUSA_TECLA_MS);
+            mandar(f(10, cat(f(1, codigos.get(i)), f(2, CORTA))));
+        }
     }
 
     @Override boolean largo() { return true; }
