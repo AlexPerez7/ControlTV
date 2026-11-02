@@ -33,6 +33,7 @@ class Driver:
     marca = "?"
     caps: tuple = ()
     teclas = None  # None = todas; o la tupla de teclas que admite (la web oculta el resto)
+    largo = False  # True si admite mantener una tecla (key_hold)
 
     def __init__(self, ip: str, modelo: str = "", nombre: str = ""):
         self.ip, self.modelo = ip, modelo
@@ -48,6 +49,10 @@ class Driver:
 
     def key(self, k: str):
         raise DriverError("Este dispositivo no admite teclas")
+
+    def key_hold(self, k: str, accion: str):
+        """Mantener una tecla: accion "start" al pulsar y "end" al soltar."""
+        raise DriverError("Este dispositivo no admite mantener teclas")
 
     def text(self, t: str):
         raise DriverError("Este dispositivo no admite texto")
@@ -369,6 +374,8 @@ class AndroidTV(Driver):
         self._sock = None
         self._listo = threading.Event()
         self._envio = threading.Lock()
+        self._hold = None  # (tecla, temporizador) mientras hay una tecla mantenida
+        self._hold_lock = threading.Lock()
         self._conn = threading.RLock()  # protege _sock/_listo (varias peticiones HTTP a la vez)
         self._pair_sock = None
         self._pair_desde = 0.0  # cuando se mostro el codigo en la TV (caduca a los 2 min)
@@ -602,10 +609,44 @@ class AndroidTV(Driver):
                 if intento:
                     raise DriverError(f"{self.nombre} no responde")
 
+    largo = True
+    HOLD_MAX = 5.0  # segundos: si no llega "end", se suelta sola (para que la tecla no quede pegada)
+    CORTA, START_LARGA, END_LARGA = 3, 1, 2  # RemoteDirection de Android TV
+
+    def _inyectar(self, k, direccion):
+        self._mandar(_pb((10, _pb((1, self.TECLAS[k]), (2, direccion)))))
+
     def key(self, k):
         if k not in self.TECLAS:
             raise DriverError("Tecla no disponible en esta TV")
-        self._mandar(_pb((10, _pb((1, self.TECLAS[k]), (2, 3)))))  # direction 3 = SHORT
+        self._inyectar(k, self.CORTA)
+
+    def key_hold(self, k, accion):
+        if k not in self.TECLAS:
+            raise DriverError("Tecla no disponible en esta TV")
+        if accion not in ("start", "end"):
+            raise DriverError("Accion no valida")
+        with self._hold_lock:
+            if self._hold:  # cualquier orden suelta antes la tecla que siga mantenida
+                previa, temporizador = self._hold
+                temporizador.cancel()
+                self._hold = None
+                self._inyectar(previa, self.END_LARGA)
+            if accion == "start":
+                self._inyectar(k, self.START_LARGA)
+                t = threading.Timer(self.HOLD_MAX, self._soltar_por_tiempo, args=(k,))
+                t.daemon = True
+                t.start()
+                self._hold = (k, t)
+
+    def _soltar_por_tiempo(self, k):
+        with self._hold_lock:
+            if self._hold and self._hold[0] == k:
+                self._hold = None
+                try:
+                    self._inyectar(k, self.END_LARGA)
+                except DriverError:
+                    pass
 
     def estado(self):
         self._asegurar_conexion()

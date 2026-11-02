@@ -38,6 +38,12 @@ abstract class Driver {
     /** Abre un enlace (p. ej. un video compartido) en el dispositivo. */
     void abrir(String url) throws Exception { throw new DriverError("Este dispositivo no admite abrir enlaces"); }
 
+    /** True si admite mantener una tecla (keyHold). */
+    boolean largo() { return false; }
+
+    /** Mantener una tecla: accion "start" al pulsar y "end" al soltar. */
+    void keyHold(String k, String accion) throws Exception { throw new DriverError("Este dispositivo no admite mantener teclas"); }
+
     /** Teclas que admite (la web oculta las demas), o null si admite todas. */
     String[] teclas() { return null; }
 
@@ -61,6 +67,7 @@ abstract class Driver {
         o.put("caps", new JSONArray(java.util.Arrays.asList(caps())));
         String[] t = teclas();
         if (t != null) o.put("teclas", new JSONArray(java.util.Arrays.asList(t)));
+        if (largo()) o.put("largo", true);
         return o;
     }
 

@@ -79,6 +79,8 @@ def ficha(k, d) -> dict:
     f = {"id": k, "marca": d.marca, "modelo": d.modelo, "nombre": d.nombre, "ip": d.ip, "caps": list(d.caps)}
     if d.teclas is not None:
         f["teclas"] = list(d.teclas)
+    if d.largo:
+        f["largo"] = True
     return f
 
 
@@ -137,8 +139,12 @@ class Handler(BaseHTTPRequestHandler):
                 cuerpo, ctype = d.icon(arg)
                 return self.responder(200, cuerpo, ctype)
             if metodo == "POST" and accion == "key" and arg:
-                d.key(arg)
-                print(f"  {d.nombre}: tecla {arg}")
+                modo = q.get("accion", [""])[0]  # start/end = mantener la tecla (pulsacion larga)
+                if modo:
+                    d.key_hold(arg, modo)
+                else:
+                    d.key(arg)
+                    print(f"  {d.nombre}: tecla {arg}")
                 return self.responder(204)
             if metodo == "POST" and accion == "text":
                 t = q.get("t", [""])[0]

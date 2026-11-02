@@ -109,7 +109,11 @@ final class Api {
                     return new Response(200, r.type.split(";")[0].trim(), r.body);
                 }
             } else if (metodo.equals("POST")) {
-                if (accion.equals("key") && arg != null) { d.key(arg); return OK; }
+                if (accion.equals("key") && arg != null) {
+                    String modo = consulta(query, "accion");  // start/end = mantener la tecla (pulsacion larga)
+                    if (modo.isEmpty()) d.key(arg); else d.keyHold(arg, modo);
+                    return OK;
+                }
                 if (accion.equals("text")) { d.text(consulta(query, "t")); return OK; }
                 if (accion.equals("launch") && arg != null) { d.launch(arg); return OK; }
                 if (accion.equals("pair") && arg != null) { d.pair(arg); return OK; }

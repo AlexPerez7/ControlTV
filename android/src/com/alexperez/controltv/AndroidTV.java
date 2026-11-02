@@ -402,10 +402,56 @@ final class AndroidTV extends Driver {
         }
     }
 
+    // RemoteDirection de Android TV
+    private static final int CORTA = 3, START_LARGA = 1, END_LARGA = 2;
+    /** Si no llega "end", la tecla mantenida se suelta sola (para que no quede pegada). */
+    private static final long HOLD_MAX_MS = 5000;
+    private final Object holdLock = new Object();
+    private String holdTecla;
+    private java.util.Timer holdTimer;
+
+    private void inyectar(String k, int direccion) throws Exception {
+        mandar(f(10, cat(f(1, TECLAS.get(k)), f(2, direccion))));
+    }
+
     @Override void key(String k) throws Exception {
-        Integer code = TECLAS.get(k);
-        if (code == null) throw new DriverError("Tecla no disponible en esta TV");
-        mandar(f(10, cat(f(1, code), f(2, 3))));  // direction 3 = SHORT
+        if (!TECLAS.containsKey(k)) throw new DriverError("Tecla no disponible en esta TV");
+        inyectar(k, CORTA);
+    }
+
+    @Override boolean largo() { return true; }
+
+    @Override void keyHold(final String k, String accion) throws Exception {
+        if (!TECLAS.containsKey(k)) throw new DriverError("Tecla no disponible en esta TV");
+        if (!accion.equals("start") && !accion.equals("end")) throw new DriverError("Accion no valida");
+        synchronized (holdLock) {
+            if (holdTecla != null) {  // cualquier orden suelta antes la tecla que siga mantenida
+                String previa = holdTecla;
+                holdTimer.cancel();
+                holdTecla = null;
+                holdTimer = null;
+                inyectar(previa, END_LARGA);
+            }
+            if (accion.equals("start")) {
+                inyectar(k, START_LARGA);
+                java.util.Timer t = new java.util.Timer(true);
+                t.schedule(new java.util.TimerTask() {
+                    @Override public void run() { soltarPorTiempo(k); }
+                }, HOLD_MAX_MS);
+                holdTecla = k;
+                holdTimer = t;
+            }
+        }
+    }
+
+    private void soltarPorTiempo(String k) {
+        synchronized (holdLock) {
+            if (!k.equals(holdTecla)) return;
+            holdTimer.cancel();
+            holdTecla = null;
+            holdTimer = null;
+            try { inyectar(k, END_LARGA); } catch (Exception ignorado) { /* TV sin respuesta: nada que soltar */ }
+        }
     }
 
     @Override synchronized JSONObject estado() throws Exception {

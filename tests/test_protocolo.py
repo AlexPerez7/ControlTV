@@ -100,6 +100,57 @@ class Emparejamiento(unittest.TestCase):
             with self.assertRaisesRegex(d.DriverError, "no valido"):
                 self.tv().abrir(malo)
 
+    def tv_capturando(self):
+        tv = self.tv()
+        tv.enviados = []
+        tv._mandar = tv.enviados.append  # sin red: guarda los mensajes que se mandarian
+        return tv
+
+    def inyeccion(self, tecla, direccion):
+        return d._pb((10, d._pb((1, d.AndroidTV.TECLAS[tecla]), (2, direccion))))
+
+    def test_mantener_tecla_manda_start_y_end(self):
+        tv = self.tv_capturando()
+        tv.key_hold("Right", "start")
+        tv.key_hold("Right", "end")
+        self.assertEqual(tv.enviados, [self.inyeccion("Right", 1), self.inyeccion("Right", 2)])
+        self.assertIsNone(tv._hold)
+
+    def test_end_sin_start_no_hace_nada(self):
+        tv = self.tv_capturando()
+        tv.key_hold("Right", "end")
+        self.assertEqual(tv.enviados, [])
+
+    def test_otra_tecla_suelta_la_anterior(self):
+        tv = self.tv_capturando()
+        tv.key_hold("Right", "start")
+        tv.key_hold("Select", "start")
+        tv.key_hold("Select", "end")
+        self.assertEqual(tv.enviados, [self.inyeccion("Right", 1), self.inyeccion("Right", 2),
+                                       self.inyeccion("Select", 1), self.inyeccion("Select", 2)])
+
+    def test_tecla_pegada_se_suelta_sola(self):
+        import time
+        tv = self.tv_capturando()
+        tv.HOLD_MAX = 0.1
+        tv.key_hold("Down", "start")
+        time.sleep(0.4)
+        self.assertEqual(tv.enviados, [self.inyeccion("Down", 1), self.inyeccion("Down", 2)])
+        self.assertIsNone(tv._hold)
+
+    def test_tecla_corta_sigue_siendo_short(self):
+        tv = self.tv_capturando()
+        tv.key("Up")
+        self.assertEqual(tv.enviados, [d._pb((10, d._pb((1, 19), (2, 3))))])
+
+    def test_mantener_rechaza_accion_o_tecla_invalida(self):
+        tv = self.tv_capturando()
+        with self.assertRaisesRegex(d.DriverError, "no valida"):
+            tv.key_hold("Up", "mitad")
+        with self.assertRaisesRegex(d.DriverError, "no disponible"):
+            tv.key_hold("Inventada", "start")
+        self.assertEqual(tv.enviados, [])
+
     def test_teclas_desconocidas(self):
         with self.assertRaisesRegex(d.DriverError, "no disponible"):
             self.tv().key("Inventada")
