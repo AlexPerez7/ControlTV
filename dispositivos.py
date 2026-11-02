@@ -31,6 +31,7 @@ def _http(url, method="GET", data=None, headers=None, timeout=4):
 class Driver:
     marca = "?"
     caps: tuple = ()
+    teclas = None  # None = todas; o la tupla de teclas que admite (la web oculta el resto)
 
     def __init__(self, ip: str, modelo: str = "", nombre: str = ""):
         self.ip, self.modelo = ip, modelo
@@ -123,6 +124,7 @@ class Hisense(Driver):
     """
     marca = "Hisense"
     caps = ("volume", "apps")
+    teclas = ("VolumeUp", "VolumeDown", "VolumeMute")
     PASO = 2
     APPS_DIAL = ("YouTube", "Netflix")
     _NS = "urn:schemas-upnp-org:service:RenderingControl:1"
@@ -221,6 +223,10 @@ class Vestel(Driver):
     CODIGOS = {"Power": 1012, "Home": 1046, "Back": 1010, "Info": 1018, "Select": 1053, "Up": 1020, "Down": 1019,
                "Left": 1021, "Right": 1022, "VolumeUp": 1016, "VolumeDown": 1017, "VolumeMute": 1013,
                "Play": 1025, "Rev": 1027, "Fwd": 1028}
+
+    @property
+    def teclas(self):
+        return tuple(self.CODIGOS)
 
     def online(self):
         try:
@@ -356,10 +362,15 @@ class AndroidTV(Driver):
         self._listo = threading.Event()
         self._envio = threading.Lock()
         self._pair_sock = None
+        self._vol = None  # (nivel, maximo, silenciado) segun la ultima notificacion de la TV
 
     @property
     def caps(self):  # sin red: el estado lo fija preparar() al escanear
-        return ("keys", "apps") if self._paired else ("pair",)
+        return ("keys", "volume", "apps") if self._paired else ("pair",)
+
+    @property
+    def teclas(self):
+        return tuple(self.TECLAS)
 
     def preparar(self):
         if not self._paired:
@@ -514,6 +525,9 @@ class AndroidTV(Driver):
                     self._enviar(s, _pb((2, _pb((1, 622)))))
                 elif 40 in m:  # remote_start: listo para recibir teclas
                     self._listo.set()
+                elif 50 in m:  # volumen: nivel (7), maximo (6), silenciado (8)
+                    v = _pb_leer(m[50][0])
+                    self._vol = (v.get(7, [0])[0], v.get(6, [0])[0], bool(v.get(8, [0])[0]))
                 elif 8 in m:  # ping
                     v = _pb_leer(m[8][0]).get(1, [0])[0]
                     self._enviar(s, _pb((9, _pb((1, v)))))
@@ -565,6 +579,17 @@ class AndroidTV(Driver):
         if k not in self.TECLAS:
             raise DriverError("Tecla no disponible en esta TV")
         self._mandar(_pb((10, _pb((1, self.TECLAS[k]), (2, 3)))))  # direction 3 = SHORT
+
+    def estado(self):
+        self._asegurar_conexion()
+        for _ in range(20):  # la TV manda el volumen justo despues de conectar
+            if self._vol:
+                break
+            time.sleep(0.05)
+        if not self._vol:
+            return {}
+        nivel, maximo, mute = self._vol
+        return {"volume": nivel, "max": maximo, "muted": mute}
 
     def apps(self):
         return [{"id": n, "name": n, "icon": False} for n in self.APPS]
@@ -620,11 +645,19 @@ def puerto_abierto(ip_local: str, puerto: int, timeout: float = 0.5) -> set:
 
 def descubrir(ip_local: str, extra_ips=()) -> list:
     """Detecta dispositivos soportados en la red. Devuelve instancias de Driver."""
-    encontrados = []
-    for ip in sorted(ssdp_ips(ip_local) | set(extra_ips) | puerto_abierto(ip_local, AndroidTV.PUERTO_REMOTE), key=lambda x: tuple(map(int, x.split(".")))):
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(2) as ex:  # SSDP y barrido de puertos a la vez
+        a = ex.submit(ssdp_ips, ip_local)
+        b = ex.submit(puerto_abierto, ip_local, AndroidTV.PUERTO_REMOTE)
+        ips = a.result() | b.result() | set(extra_ips)
+
+    def identificar(ip):
         for clase in (Roku, Hisense, AndroidTV):
             d = clase.probe(ip)
             if d:
-                encontrados.append(d)
-                break
-    return encontrados
+                return d
+        return None
+
+    orden = sorted(ips, key=lambda x: tuple(map(int, x.split("."))))
+    with ThreadPoolExecutor(16) as ex:  # cada probe puede tardar hasta ~2 s: en paralelo
+        return [d for d in ex.map(identificar, orden) if d]

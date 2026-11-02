@@ -76,7 +76,10 @@ def escanear() -> int:
 
 
 def ficha(k, d) -> dict:
-    return {"id": k, "marca": d.marca, "modelo": d.modelo, "nombre": d.nombre, "ip": d.ip, "caps": list(d.caps)}
+    f = {"id": k, "marca": d.marca, "modelo": d.modelo, "nombre": d.nombre, "ip": d.ip, "caps": list(d.caps)}
+    if d.teclas is not None:
+        f["teclas"] = list(d.teclas)
+    return f
 
 
 class Handler(BaseHTTPRequestHandler):

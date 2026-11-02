@@ -105,7 +105,7 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
 - [ ] **C** · La app Android ignora `dispositivos.json` (los agregados a mano, como la onn); permitir agregarlos desde la app.
 
 ### Rendimiento
-- [ ] **A** · Escaneo del servidor: los `probe` se hacen uno tras otro por IP (cada uno espera hasta 1,5-2 s). Hacerlos en
+- [x] **A** · (hecho en el servidor: ~5,6 s → ~3,2 s; falta la app) Escaneo del servidor: los `probe` se hacen uno tras otro por IP (cada uno espera hasta 1,5-2 s). Hacerlos en
       paralelo (ThreadPoolExecutor, como ya hace `puerto_abierto`) y lanzar SSDP y el barrido de puertos a la vez: de ~10 s a ~3 s.
 - [ ] **B** · Roku: cada tecla y cada letra del texto abren una conexión HTTP nueva. Reutilizar la conexión
       (`http.client.HTTPConnection` con keep-alive) baja la latencia y acelera mucho el envío de texto.
@@ -128,9 +128,9 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
       (un `fetch` desde otra web llega igual). Comprobar la cabecera `Origin` y, opcional, un PIN.
 
 ### UI y UX
-- [ ] **A** · Botones por dispositivo: cada driver podría declarar las teclas que soporta y la web ocultar el resto
+- [x] **A** · (hecho: campo `teclas` en la ficha) Botones por dispositivo: cada driver podría declarar las teclas que soporta y la web ocultar el resto
       (p. ej. "↺ Repetir" o "Encender" no sirven en todas las TV).
-- [ ] **A** · Emparejamiento: al pulsar "Mostrar código", enfocar el campo del código, aceptar minúsculas y emparejar solo al
+- [x] **A** · (hecho, falta el nombre real de la TV) Emparejamiento: al pulsar "Mostrar código", enfocar el campo del código, aceptar minúsculas y emparejar solo al
       escribir el 6.º carácter. Mostrar el nombre de la TV.
 - [ ] **B** · Nombre real de la TV: hoy la Caixun sale como "Android TV". La propia TV lo envía al conectar (`remote_configure`
       trae fabricante y modelo) y también responde en `http://IP:8008/setup/eureka_info`.
@@ -142,9 +142,9 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
 - [ ] **C** · Diseño horizontal/tablet (hoy la columna mide como máximo 420 px) y tema claro.
 
 ### Funciones nuevas
-- [ ] **A** · Android TV: **volumen visible**. La TV envía por la misma conexión el nivel, el máximo y el mute
+- [x] **A** · (hecho: la Caixun ahora tenia sin botones de volumen) Android TV: **volumen visible**. La TV envía por la misma conexión el nivel, el máximo y el mute
       (`remote_set_volume_level`); con eso se activa la capacidad `volume` y se ve el número como en la Hisense.
-- [ ] **A** · App Android: **botones de volumen del celular** controlan la TV elegida (`onKeyDown` de VOLUME_UP/DOWN).
+- [x] **A** · (hecho y probado en la Caixun) App Android: **botones de volumen del celular** controlan la TV elegida (`onKeyDown` de VOLUME_UP/DOWN).
 - [ ] **B** · Android TV: **escribir texto** (mensaje `remote_ime_batch_edit`), para búsquedas y contraseñas.
 - [ ] **B** · App Android: **"Compartir con Control TV"**: compartir un video de YouTube desde el celular y que se abra en la TV
       (filtro de intents `SEND` + `launch` con el enlace).

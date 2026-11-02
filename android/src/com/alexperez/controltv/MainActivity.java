@@ -42,6 +42,7 @@ public class MainActivity extends Activity {
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(false);
         s.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        web.addJavascriptInterface(new Puente(), "App");  // solo recibe paginas de controltv.local (ver shouldOverrideUrlLoading)
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
@@ -88,6 +89,25 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int codigo, String[] permisos, int[] resultados) {
         web.loadUrl("http://" + HOST + "/");  // si se denego, la web mostrara "Sin dispositivos"
+    }
+
+    /** La web avisa si la TV elegida admite volumen (aplicarCaps en index.html). */
+    private volatile boolean tvConVolumen = false;
+
+    private final class Puente {
+        @android.webkit.JavascriptInterface
+        public void volumen(boolean si) { tvConVolumen = si; }
+    }
+
+    /** Los botones de volumen del celular controlan la TV elegida si esta soporta volumen; si no, quedan para el celular. */
+    @Override
+    public boolean onKeyDown(int codigo, android.view.KeyEvent ev) {
+        if (tvConVolumen && (codigo == android.view.KeyEvent.KEYCODE_VOLUME_UP || codigo == android.view.KeyEvent.KEYCODE_VOLUME_DOWN)) {
+            String k = codigo == android.view.KeyEvent.KEYCODE_VOLUME_UP ? "VolumeUp" : "VolumeDown";
+            web.evaluateJavascript("key('" + k + "')", null);
+            return true;
+        }
+        return super.onKeyDown(codigo, ev);
     }
 
     @Override

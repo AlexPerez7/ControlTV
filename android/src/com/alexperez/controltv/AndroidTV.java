@@ -63,14 +63,17 @@ final class AndroidTV extends Driver {
     private volatile boolean listo;
     private final Object envio = new Object();
     private SSLSocket pairSock;
+    private volatile int volNivel = -1, volMax, volMute;  // ultima notificacion de la TV (-1 = aun no llego)
 
     AndroidTV(String ip, String modelo, String nombre) { super(ip, modelo, nombre); }
 
     @Override String marca() { return "Android TV"; }
 
     @Override String[] caps() {  // sin red: no bloquea /devices
-        return pareado ? new String[] {"keys", "apps"} : new String[] {"pair"};
+        return pareado ? new String[] {"keys", "volume", "apps"} : new String[] {"pair"};
     }
+
+    @Override String[] teclas() { return TECLAS.keySet().toArray(new String[0]); }
 
     @Override void preparar() {
         if (!pareado) pareado = comprobarPareado();
@@ -315,6 +318,11 @@ final class AndroidTV extends Driver {
                     enviar(s, f(2, f(1, 622)));
                 } else if (m.containsKey(40)) {  // remote_start: listo para recibir teclas
                     listo = true;
+                } else if (m.containsKey(50)) {  // volumen: nivel (7), maximo (6), silenciado (8)
+                    Map<Integer, List<Object>> v = leer((byte[]) m.get(50).get(0));
+                    volMax = (int) entero(v, 6, 0);
+                    volMute = (int) entero(v, 8, 0);
+                    volNivel = (int) entero(v, 7, 0);
                 } else if (m.containsKey(8)) {   // ping
                     long v = entero(leer((byte[]) m.get(8).get(0)), 1, 0);
                     enviar(s, f(9, f(1, v)));
@@ -370,6 +378,13 @@ final class AndroidTV extends Driver {
         Integer code = TECLAS.get(k);
         if (code == null) throw new DriverError("Tecla no disponible en esta TV");
         mandar(f(10, cat(f(1, code), f(2, 3))));  // direction 3 = SHORT
+    }
+
+    @Override synchronized JSONObject estado() throws Exception {
+        asegurarConexion();
+        for (int i = 0; i < 20 && volNivel < 0; i++) Thread.sleep(50);  // la TV manda el volumen justo despues de conectar
+        if (volNivel < 0) return new JSONObject();
+        return new JSONObject().put("volume", volNivel).put("max", volMax).put("muted", volMute != 0);
     }
 
     @Override JSONArray apps() throws Exception {

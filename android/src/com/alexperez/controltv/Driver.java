@@ -35,6 +35,9 @@ abstract class Driver {
     void launch(String appId) throws Exception { throw new DriverError("Este dispositivo no admite abrir apps"); }
     Net.Resp icon(String appId) throws Exception { throw new DriverError("Sin iconos"); }
     JSONObject estado() throws Exception { return new JSONObject(); }
+    /** Teclas que admite (la web oculta las demas), o null si admite todas. */
+    String[] teclas() { return null; }
+
     /** Comprobaciones lentas por red que se hacen al escanear (fuera de cualquier lock). */
     void preparar() { }
     void pair(String arg) throws Exception { throw new DriverError("Este dispositivo no necesita emparejarse"); }
@@ -53,6 +56,8 @@ abstract class Driver {
         o.put("nombre", nombre);
         o.put("ip", ip);
         o.put("caps", new JSONArray(java.util.Arrays.asList(caps())));
+        String[] t = teclas();
+        if (t != null) o.put("teclas", new JSONArray(java.util.Arrays.asList(t)));
         return o;
     }
 

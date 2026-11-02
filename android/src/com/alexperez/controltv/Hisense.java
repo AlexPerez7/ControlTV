@@ -25,6 +25,7 @@ final class Hisense extends Driver {
 
     @Override String marca() { return "Hisense"; }
     @Override String[] caps() { return new String[] {"volume", "apps"}; }
+    @Override String[] teclas() { return new String[] {"VolumeUp", "VolumeDown", "VolumeMute"}; }
 
     static Hisense probe(String ip) {
         try {
