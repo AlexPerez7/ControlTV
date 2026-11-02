@@ -101,7 +101,7 @@ Se extrajo y analizo con REA (`rea`, JADX) lo que hay en el movil; ningun protoc
 ## Instalar la app en otros celulares (familia)
 
 - El APK se genera con `source ~/tools/env.sh && bash android/build.sh` y queda en `android/build/ControlTV.apk` (ignorado por git).
-  Subir `versionCode`/`versionName` en `android/AndroidManifest.xml` en cada versión que se reparta (hoy 2 / 1.1).
+  Subir `versionCode`/`versionName` en `android/AndroidManifest.xml` en cada versión que se reparta (hoy 3 / 1.2).
 - Se pasa por WhatsApp, Drive o USB. En el celular de destino hay que permitir "Instalar apps desconocidas" para la app desde la que se abre
   el archivo. Requiere Android 8 o superior (`minSdk` 26), WiFi de la misma red que las TV y aceptar el permiso de red local si lo pide.
 - **Respaldar `~/tools/controltv.keystore`** (copia fuera del PC): las actualizaciones solo se instalan encima si van firmadas con la misma
