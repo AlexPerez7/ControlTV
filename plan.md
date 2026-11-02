@@ -22,8 +22,19 @@ y la interfaz muestra solo los botones que soporta. `servidor.ps1` es la version
 - `SetMute` responde 200 pero no tiene efecto (`GetMute` sigue en 0): el mute se **emula** con el volumen (guarda y pone 0).
 - Volumen: escala 0-100, paso de 2 por pulsacion (`Hisense.PASO`).
 - `AVTransport` (DLNA, enviar video/audio/fotos) sin probar.
-- Las teclas (flechas, OK, Power) no tienen canal conocido. Candidatos: puertos 8060/13000, o analizar la app oficial
-  (RemoteNOW) con REA para ver su protocolo.
+- Las teclas (flechas, OK, Power, fuente) **no tienen canal conocido**; ver "Descartado" abajo.
+
+### Hisense: lo descartado (analisis con REA, nov 2026)
+Se extrajo y analizo con REA (`rea`, JADX) lo que hay en el movil; ningun protocolo de app encaja con esta TV:
+- **Android TV Remote (6466/6467):** `com.allrcs.hisense_remote` ("Remote for Hisense Smart TV") lo usa; la TV no tiene esos puertos.
+- **VIDAA / RemoteNOW (MQTT, 36669):** `com.universal.remote.multi` (app "VIDAA", Flutter, codigo protegido con baiduprotect)
+  **no encuentra la TV**; el puerto 36669 esta cerrado. Define un servicio UPnP `HisenseLanControl` (`LanControlInfo`) que la TV no expone.
+- **UDP antiguo de Hisense (50000/60030, proyecto hisense-udp):** el DISCOVERY y el CTCREATE no reciben respuesta.
+- **Puertos 8060 y 13000:** aceptan TCP pero no contestan a HTTP ni TLS ni mandan banner; ninguna app probada los usa.
+- Probado y **sin probar**: falta "Hisense TV Remote Controller" (Mobile-care); si alguna app aparte controla la TV, capturar su
+  trafico con PCAPdroid y analizar el `.pcap` con REA.
+- Ojo al conseguir APK: los sitios espejo entregaron archivos equivocados (instalador de Aptoide y una app de 463 MB ajena).
+  Instalar siempre desde Google Play en el perfil normal (no en Carpeta Segura: `adb` no accede al usuario 150) y sacar el APK con `adb pull`.
 
 ### Como agregar otra TV o marca
 1. Crear una subclase de `Driver` en `dispositivos.py` (`probe` para autodeteccion, `caps` y los metodos que soporte) y
@@ -46,7 +57,10 @@ y la interfaz muestra solo los botones que soporta. `servidor.ps1` es la version
 - [ ] Si algún día hay un control IR o un adaptador UART: reevaluar.
 
 ### Mejoras generales (por orden de prioridad)
-- [ ] Hisense: teclas/encendido (puertos 8060/13000 o analizar RemoteNOW con REA); probar AVTransport (DLNA).
+- [ ] Hisense: probar "Hisense TV Remote Controller" (Mobile-care); si controla la TV, capturar trafico (PCAPdroid) y analizarlo con REA.
+- [ ] Hisense: revisar en los ajustes de red de la TV opciones tipo Wake on LAN / control de red y reescanear puertos.
+- [ ] **Driver IR** (emisor IR WiFi tipo Broadlink/Tuya, ~10-15 USD): plan B universal para teclas, encendido y fuente en cualquier TV.
+- [ ] Hisense: probar AVTransport (DLNA) para enviar video/audio/fotos.
 - [ ] Comprobar si el permiso de la TV Hisense persiste tras reiniciar la TV.
 - [ ] **Funcionar sin el PC:** probar una página HTML local en el celular que mande las teclas directo al Roku
       (`POST http://IP_ROKU:8060/keypress/<tecla>`, modo `no-cors`). Verificar en el celular que el navegador lo permita.
