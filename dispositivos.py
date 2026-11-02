@@ -596,6 +596,8 @@ class AndroidTV(Driver):
         with self._envio:
             self._enviar_msg(s, datos)
 
+    ESPERA_TECLADO = 0.4
+
     def _asegurar_conexion(self):
         with self._conn:
             if self._sock is not None and self._listo.is_set():
@@ -612,6 +614,9 @@ class AndroidTV(Driver):
                 s.close()
                 self._paired = False
                 raise DriverError("La TV no acepto la conexion: vuelve a emparejarla")
+            # La TV crea un control virtual (uinput) por cada conexion; una tecla enviada antes de que
+            # exista se pierde (la primera pulsacion "no hacia nada").
+            time.sleep(self.ESPERA_TECLADO)
             return s
 
     def _mandar(self, datos):

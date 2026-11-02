@@ -383,6 +383,7 @@ final class AndroidTV extends Driver {
             pareado = false;
             throw new DriverError("La TV no acepto la conexion: vuelve a emparejarla");
         }
+        Thread.sleep(400);  // la TV crea un control virtual por conexion; una tecla enviada antes se pierde
         return s;
     }
 

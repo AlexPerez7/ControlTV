@@ -195,3 +195,5 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
 1. Ejecutar `Iniciar Control TV.bat` (detecta los dispositivos de la red al arrancar; el boton "Buscar" de la web vuelve a escanear).
 2. Abrir en el celular la dirección que muestra la ventana, por ejemplo `http://192.168.31.14:8090`.
 3. El celular y el PC deben estar en el mismo WiFi.
+
+- **Primera tecla perdida (corregido)**: la TV crea un control virtual (uinput `virtual-remote`) por conexion; una tecla enviada justo al conectar se perdia (p. ej. Ajustes "no hacia nada" la primera vez). Ahora se espera 0,4 s tras conectar. Ajustes (176) funciona: el receptor `GlobalKeyReceiver` de la TV abre `com.android.tv.settings`. Diagnostico con ADB: `logcat | grep GlobalKey` y `getevent -lt` para ver que manda el control fisico.
