@@ -83,7 +83,17 @@ final class AndroidTV extends Driver {
     static AndroidTV probe(String ip) {
         try (Socket s = new Socket()) {
             s.connect(new InetSocketAddress(ip, PUERTO_PAIR), 1500);
-            return new AndroidTV(ip, "", null);
+            return new AndroidTV(ip, "", nombreCast(ip));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Nombre que el usuario le puso a la TV (lo publica por Chromecast en :8008); null si no lo da. */
+    private static String nombreCast(String ip) {
+        try {
+            String n = new JSONObject(Net.get("http://" + ip + ":8008/setup/eureka_info?params=name", 2000).text()).optString("name", "");
+            return n.isEmpty() ? null : n;
         } catch (Exception e) {
             return null;
         }

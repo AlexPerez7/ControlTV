@@ -5,6 +5,7 @@ automatica, opcional) y los metodos que soporte, y anadela a DRIVERS al final de
 Cada driver declara en `caps` lo que puede hacer: keys, text, apps, volume.
 """
 import hashlib
+import json
 import os
 import re
 import socket
@@ -384,7 +385,16 @@ class AndroidTV(Driver):
                 socket.create_connection((ip, p), timeout=1.5).close()
             except OSError:
                 return None
-        return cls(ip, "")
+        return cls(ip, "", cls._nombre_cast(ip))
+
+    @staticmethod
+    def _nombre_cast(ip):
+        """Nombre que el usuario le puso a la TV (lo publica por Chromecast en :8008); "" si no lo da."""
+        try:
+            cuerpo, _ = _http(f"http://{ip}:8008/setup/eureka_info?params=name", timeout=2)
+            return str(json.loads(cuerpo).get("name") or "")
+        except Exception:
+            return ""
 
     # -- TLS ---------------------------------------------------------------
     @classmethod

@@ -172,18 +172,36 @@ function aplicarCaps() {
   if (caps.includes('volume')) refrescarVolumen();
   if (window.App) App.volumen(caps.includes('volume'));  // la app usa los botones de volumen del celular
 }
+// ● en línea, ○ sin respuesta, nada mientras no se sabe (lo actualiza refrescarEnLinea)
+const enLineaDev = {};
+function etiqueta(d) {
+  const p = enLineaDev[d.id] === true ? '● ' : enLineaDev[d.id] === false ? '○ ' : '';
+  return p + d.nombre + (d.modelo && !d.nombre.includes(d.modelo) ? ' · ' + d.modelo : '');
+}
+async function refrescarEnLinea() {
+  if (document.hidden || !dispositivos.length) return;
+  await Promise.all(dispositivos.map(async d => {
+    try { enLineaDev[d.id] = (await (await fetch('/d/' + d.id + '/online', { cache: 'no-store' })).json()).online; }
+    catch { enLineaDev[d.id] = false; }
+  }));
+  [...selDev.options].forEach(o => { const d = dispositivos.find(x => x.id === o.value); if (d) o.textContent = etiqueta(d); });
+}
+setInterval(refrescarEnLinea, 10000);
+document.addEventListener('visibilitychange', refrescarEnLinea);
+
 async function cargarDispositivos() {
   try { dispositivos = await (await fetch('/devices', { cache: 'no-store' })).json(); } catch { return; }
   const guardado = localStorage.getItem('dispositivo');
   selDev.textContent = '';
   dispositivos.forEach(d => {
     const o = document.createElement('option');
-    o.value = d.id; o.textContent = d.nombre + (d.modelo && !d.nombre.includes(d.modelo) ? ' · ' + d.modelo : '');
+    o.value = d.id; o.textContent = etiqueta(d);
     selDev.appendChild(o);
   });
   if (!dispositivos.length) { setEstado('Sin dispositivos: enciéndelos y pulsa Buscar', true); actual = null; aplicarCaps(); return; }
   selDev.value = dispositivos.some(d => d.id === guardado) ? guardado : dispositivos[0].id;
   elegir();
+  refrescarEnLinea();
 }
 function elegir() {
   actual = dispositivos.find(d => d.id === selDev.value) || null;

@@ -102,6 +102,7 @@ final class Api {
             String accion = m.group(2), arg = m.group(3);
             if (metodo.equals("GET")) {
                 if (accion.equals("apps")) return json(d.apps());
+                if (accion.equals("online")) return json(new JSONObject().put("online", d.online()));
                 if (accion.equals("estado")) return json(d.estado());
                 if (accion.equals("icon") && arg != null) {
                     Net.Resp r = d.icon(arg);

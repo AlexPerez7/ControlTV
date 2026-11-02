@@ -100,7 +100,7 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
       abierto si el usuario no escribe el código. (Hecho: el código caduca a los 2 min. Falta el lock de `_sock`/`_listo`.)
 - [ ] **B** · Los IDs de dispositivo dependen de la IP (`android-tv-192-168-31-108`): si el router cambia la IP, la web olvida
       el dispositivo elegido. Usar un dato fijo (MAC, número de serie, `udn`) o reservar IPs en el router.
-- [ ] **B** · `online()` existe en todos los drivers pero nadie lo usa: el indicador "● Conectado" solo comprueba el servidor,
+- [x] **B** · (hecho: `GET /d/<id>/online`, ● / ○ en el selector cada 10 s) `online()` existe en todos los drivers pero nadie lo usa: el indicador "● Conectado" solo comprueba el servidor,
       no la TV. Usarlo para un punto verde/rojo por dispositivo en el selector.
 - [ ] **C** · La app Android ignora `dispositivos.json` (los agregados a mano, como la onn); permitir agregarlos desde la app.
 
@@ -132,7 +132,7 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
       (p. ej. "↺ Repetir" o "Encender" no sirven en todas las TV).
 - [x] **A** · (hecho, falta el nombre real de la TV) Emparejamiento: al pulsar "Mostrar código", enfocar el campo del código, aceptar minúsculas y emparejar solo al
       escribir el 6.º carácter. Mostrar el nombre de la TV.
-- [ ] **B** · Nombre real de la TV: hoy la Caixun sale como "Android TV". La propia TV lo envía al conectar (`remote_configure`
+- [x] **B** · (hecho: `:8008/setup/eureka_info` → "AiPlus2K") Nombre real de la TV: hoy la Caixun sale como "Android TV". La propia TV lo envía al conectar (`remote_configure`
       trae fabricante y modelo) y también responde en `http://IP:8008/setup/eureka_info`.
 - [ ] **B** · Apps sin icono en Android TV y Hisense: usar iconos/colores propios (SVG pequeños en la web) en lugar de texto.
 - [ ] **B** · Pulsación larga real: en Android TV mandar `START_LONG`/`END_LONG` al mantener OK (abre menús contextuales),

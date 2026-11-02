@@ -129,6 +129,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if metodo == "GET" and accion == "apps":
                 return self.json(d.apps())
+            if metodo == "GET" and accion == "online":
+                return self.json({"online": bool(d.online())})
             if metodo == "GET" and accion == "estado":
                 return self.json(d.estado())
             if metodo == "GET" and accion == "icon" and arg:
