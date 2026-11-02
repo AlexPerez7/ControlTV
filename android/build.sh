@@ -4,8 +4,11 @@
 set -euo pipefail
 AQUI="$(cd "$(dirname "$0")" && pwd)"
 SDK="${ANDROID_HOME:-$HOME/tools/android-sdk}"
+# build-tools y plataforma: las de siempre si existen; si no (p. ej. en GitHub Actions), las mas nuevas instaladas.
 BT="$SDK/build-tools/36.0.0"
+[ -d "$BT" ] || BT="$SDK/build-tools/$(ls "$SDK/build-tools" | sort -V | tail -1)"
 JAR="$SDK/platforms/android-35/android.jar"
+[ -f "$JAR" ] || JAR="$SDK/platforms/$(ls "$SDK/platforms" | sort -V | tail -1)/android.jar"
 KS="${CONTROLTV_KEYSTORE:-$HOME/tools/controltv.keystore}"   # clave de firma: fuera del repositorio
 OUT="$AQUI/build"
 
@@ -40,6 +43,7 @@ PY
 "$BT/zipalign" -f -p 4 "$OUT/base.apk" "$OUT/alineado.apk"
 
 if [ ! -f "$KS" ]; then
+    [ -z "${CI:-}" ] || { echo "Falta el keystore de firma ($KS): en CI debe venir del secreto KEYSTORE_B64"; exit 1; }
     keytool -genkeypair -keystore "$KS" -alias controltv -keyalg RSA -keysize 2048 -validity 10000 \
         -storepass controltv -keypass controltv -dname "CN=ControlTV"
 fi

@@ -54,6 +54,17 @@ adb install -r android/build/ControlTV.apk
 
 No hay claves en el repositorio ni en el APK. El APK se firma con tu propio keystore; guárdalo, porque las actualizaciones solo se instalan encima si van firmadas con la misma clave.
 
+## Publicar una versión (mantenedor)
+
+Subir `versionCode` y `versionName` en `android/AndroidManifest.xml`, hacer commit y subir una etiqueta que coincida:
+
+```bash
+git tag v1.4 && git push origin v1.4
+```
+
+El workflow `.github/workflows/release.yml` ejecuta las pruebas, compila el APK, lo firma con el secreto `KEYSTORE_B64` y crea el Release.
+La primera vez hay que guardar el keystore como secreto: `base64 -w0 ~/tools/controltv.keystore | gh secret set KEYSTORE_B64`.
+
 ## Pruebas
 
 ```bash

@@ -1,0 +1,36 @@
+# Al subir una etiqueta vX.Y (p. ej. `git tag v1.4 && git push origin v1.4`) compila el APK firmado y crea el Release.
+# Requiere el secreto KEYSTORE_B64 (keystore de firma en base64): base64 -w0 ~/tools/controltv.keystore | gh secret set KEYSTORE_B64
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Pruebas
+        run: python3 -I -m unittest discover -s tests
+      - name: La etiqueta debe coincidir con versionName
+        run: |
+          v=$(sed -n 's/.*android:versionName="\([^"]*\)".*/\1/p' android/AndroidManifest.xml)
+          [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "Etiqueta ${GITHUB_REF_NAME} no coincide con versionName $v"; exit 1; }
+      - name: Compilar y firmar
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          [ -n "$KEYSTORE_B64" ] || { echo "Falta el secreto KEYSTORE_B64"; exit 1; }
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/controltv.keystore"
+          CONTROLTV_KEYSTORE="$RUNNER_TEMP/controltv.keystore" bash android/build.sh
+      - name: Publicar Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/build/ControlTV.apk "$RUNNER_TEMP/ControlTV.apk"
+          gh release create "${GITHUB_REF_NAME}" "$RUNNER_TEMP/ControlTV.apk" --title "Control TV ${GITHUB_REF_NAME#v}" --generate-notes
