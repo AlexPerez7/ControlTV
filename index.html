@@ -30,13 +30,15 @@
   .pad .up{top:0;left:90px} .pad .down{bottom:0;left:90px} .pad .left{left:0;top:90px} .pad .right{right:0;top:90px}
   .pad .ok { top:70px; left:70px; width:120px; height:120px; background:var(--acc); font-weight:700; font-size:20px; }
   .pad .ok:active { background:#7d52e0; }
-  .modo { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:14px; background:var(--btn); border-radius:14px; padding:4px; }
-  .modo button { height:40px; background:transparent; font-size:15px; }
-  .modo button.act { background:var(--acc); }
-  .tvonly { display:none; }
-  body.tv .tvonly { display:grid; }
-  /* Modo basico: oculta lo que hoy no funciona (control directo de la TV y volumen via Roku) */
-  body.basico .modo, body.basico .tvonly, body.basico .volbox { display:none !important; }
+  .sel { display:grid; grid-template-columns:1fr auto; gap:8px; margin-bottom:14px; }
+  .sel select { background:var(--btn); color:var(--txt); border:none; border-radius:12px; padding:0 12px; font-size:16px; height:44px; }
+  .sel button { height:44px; padding:0 14px; font-size:14px; }
+  .cap { display:none; }
+  body.c-keys .cap-keys, body.c-text .cap-text, body.c-apps .cap-apps, body.c-volume .cap-volume { display:block; }
+  body.c-keys .row.cap-keys, body.c-text .row.cap-text { display:grid; }
+  body.c-keys .cap-keys.pad { display:block; }
+  body.c-text .txt.cap-text { display:flex; }
+  .volnum { text-align:center; font-size:13px; opacity:.7; margin:-2px 0 10px; }
   .conn { font-size:12px; text-align:center; margin:-6px 0 12px; opacity:.75; }
   .conn.ok { color:#6fcf97; } .conn.mal { color:#ff7b6b; opacity:1; }
   .vol { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:12px; }
@@ -61,24 +63,18 @@
 
   <div class="conn" id="conn">● Conectando…</div>
 
-  <div class="modo" id="modo">
-    <button data-modo="roku">📦 Roku</button>
-    <button data-modo="tv">📺 TV (ajustes)</button>
+  <div class="sel">
+    <select id="dev"></select>
+    <button id="buscar" title="Buscar dispositivos">🔄 Buscar</button>
   </div>
 
-  <div class="row c3 tvonly">
-    <button data-k="TV:MENU">☰ Menú</button>
-    <button data-k="TV:SOURCE">⮕ Fuente</button>
-    <button data-k="TV:EXIT">✕ Salir</button>
-  </div>
-
-  <div class="row c3">
+  <div class="row c3 cap cap-keys">
     <button data-k="Back">↩ Atrás</button>
     <button data-k="Info">✱ Opciones</button>
     <button data-k="Search">🔍 Buscar</button>
   </div>
 
-  <div class="pad">
+  <div class="pad cap cap-keys">
     <button class="up" data-k="Up" data-rep>▲</button>
     <button class="left" data-k="Left" data-rep>◀</button>
     <button class="ok" data-k="Select">OK</button>
@@ -86,56 +82,53 @@
     <button class="down" data-k="Down" data-rep>▼</button>
   </div>
 
-  <div class="row c3">
+  <div class="row c3 cap cap-keys">
     <button data-k="Rev" data-rep>⏪</button>
     <button data-k="Play">⏯</button>
     <button data-k="Fwd" data-rep>⏩</button>
   </div>
 
-  <div class="volbox">
+  <div class="volbox cap cap-volume">
     <div class="lbl">Volumen TV</div>
     <div class="vol">
       <button data-k="VolumeDown" data-rep>🔉 −</button>
       <button data-k="VolumeMute">🔇</button>
       <button data-k="VolumeUp" data-rep>🔊 +</button>
     </div>
+    <div class="volnum" id="volnum"></div>
   </div>
 
-  <div class="row c3">
+  <div class="row c3 cap cap-keys">
     <button data-k="InstantReplay">↺ Repetir</button>
     <button data-k="PowerOff">Apagar</button>
     <button data-k="PowerOn">Encender</button>
   </div>
 
-  <div class="lbl">Escribir texto (búsquedas, contraseñas)</div>
-  <div class="txt">
+  <div class="lbl cap cap-text">Escribir texto (búsquedas, contraseñas)</div>
+  <div class="txt cap cap-text">
     <input id="texto" placeholder="Escribe aquí..." autocomplete="off">
     <button id="enviar">Enviar</button>
   </div>
-  <div class="row c2">
+  <div class="row c2 cap cap-text">
     <button data-k="Backspace">⌫ Borrar</button>
     <button data-k="Enter">⏎ Enter</button>
   </div>
 
-  <details id="detApps">
+  <details id="detApps" class="cap cap-apps">
     <summary>📺 Aplicaciones</summary>
     <div class="apps" id="apps"></div>
   </details>
 
   <small class="help">
-    Controla el Roku por WiFi: el celular y el PC con el servidor deben estar en la misma red.
-    Esta TV no acepta volumen ni encendido por red, así que esos botones están ocultos.
-    Mantén presionadas las flechas para repetir.
+    Controla tus dispositivos por WiFi: el celular y el PC con el servidor deben estar en la misma red.
+    Elige el dispositivo arriba; los botones cambian según lo que soporte cada marca.
+    Mantén presionadas las flechas y el volumen para repetir.
   </small>
 </div>
 
 <script>
 const estado = document.getElementById('estado');
 function setEstado(t, err) { estado.textContent = t; estado.className = 'estado' + (err ? ' err' : ''); }
-
-// Pon HABILITAR_TV = true si algun dia la TV acepta comandos (ver servidor.py, /tv/key/...).
-const HABILITAR_TV = false;
-if (!HABILITAR_TV) { document.body.classList.add('basico'); localStorage.setItem('modo', 'roku'); }
 
 // Indicador de conexion con el servidor (mismo WiFi + PC encendido).
 const conn = document.getElementById('conn');
@@ -147,39 +140,66 @@ async function revisarConexion() {
     enLinea = ok;
     conn.textContent = ok ? '● Conectado' : '● Sin conexión: revisa que el celular esté en el mismo WiFi y el PC encendido';
     conn.className = 'conn ' + (ok ? 'ok' : 'mal');
+    if (ok) cargarDispositivos();
   }
 }
 revisarConexion(); setInterval(revisarConexion, 4000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) revisarConexion(); });
 
-// Modo "TV": las teclas van directo a la TV (protocolo Vestel Smart Center) en vez de al Roku.
-const TV_MAP = { Up:'UP', Down:'DOWN', Left:'LEFT', Right:'RIGHT', Select:'OK', Back:'BACK', Home:'HOME',
-  VolumeUp:'VOL_UP', VolumeDown:'VOL_DOWN', VolumeMute:'MUTE', Power:'POWER', Info:'INFO',
-  Rev:'REWIND', Fwd:'FORWARD', Play:'PLAY' };
-let modo = localStorage.getItem('modo') === 'tv' ? 'tv' : 'roku';
-function aplicarModo() {
-  document.body.classList.toggle('tv', modo === 'tv');
-  document.querySelectorAll('[data-modo]').forEach(b => b.classList.toggle('act', b.dataset.modo === modo));
+// Dispositivos: cada uno declara sus capacidades (keys, text, apps, volume).
+const selDev = document.getElementById('dev');
+let dispositivos = [], actual = null;
+const CAPS = ['keys', 'text', 'apps', 'volume'];
+function aplicarCaps() {
+  const caps = actual ? actual.caps : [];
+  CAPS.forEach(c => document.body.classList.toggle('c-' + c, caps.includes(c)));
+  appsCargadas = false; document.getElementById('apps').textContent = '';
+  document.getElementById('detApps').open = false;
+  document.getElementById('volnum').textContent = '';
+  if (caps.includes('volume')) refrescarVolumen();
 }
-document.querySelectorAll('[data-modo]').forEach(b => b.addEventListener('click', () => {
-  modo = b.dataset.modo; localStorage.setItem('modo', modo); aplicarModo();
-  setEstado(modo === 'tv' ? 'Modo TV: teclas directas a la TV' : 'Modo Roku');
-}));
-aplicarModo();
+async function cargarDispositivos() {
+  try { dispositivos = await (await fetch('/devices', { cache: 'no-store' })).json(); } catch { return; }
+  const guardado = localStorage.getItem('dispositivo');
+  selDev.textContent = '';
+  dispositivos.forEach(d => {
+    const o = document.createElement('option');
+    o.value = d.id; o.textContent = d.nombre + (d.modelo && !d.nombre.includes(d.modelo) ? ' · ' + d.modelo : '');
+    selDev.appendChild(o);
+  });
+  if (!dispositivos.length) { setEstado('Sin dispositivos: enciéndelos y pulsa Buscar', true); actual = null; aplicarCaps(); return; }
+  selDev.value = dispositivos.some(d => d.id === guardado) ? guardado : dispositivos[0].id;
+  elegir();
+}
+function elegir() {
+  actual = dispositivos.find(d => d.id === selDev.value) || null;
+  if (actual) localStorage.setItem('dispositivo', actual.id);
+  aplicarCaps();
+}
+selDev.addEventListener('change', elegir);
+document.getElementById('buscar').addEventListener('click', async () => {
+  setEstado('Buscando dispositivos...');
+  try { await fetch('/scan', { method: 'POST' }); await cargarDispositivos(); setEstado('✓ ' + dispositivos.length + ' dispositivo(s)'); }
+  catch { setEstado('Error al buscar', true); }
+});
+
+async function refrescarVolumen() {
+  if (!actual || !actual.caps.includes('volume')) return;
+  try {
+    const e = await (await fetch('/d/' + actual.id + '/estado')).json();
+    document.getElementById('volnum').textContent = e.muted ? 'Silenciado' : 'Volumen: ' + e.volume;
+  } catch {}
+}
 
 async function key(k) {
+  if (!actual) { setEstado('Elige un dispositivo', true); return; }
   if (navigator.vibrate) navigator.vibrate(15);
-  let url, destino = 'el Roku';
-  if (k.startsWith('TV:')) { url = '/tv/key/' + k.slice(3); destino = 'la TV'; }
-  else if (modo === 'tv') {
-    if (!TV_MAP[k]) { setEstado('Ese botón no existe en modo TV', true); return; }
-    url = '/tv/key/' + TV_MAP[k]; destino = 'la TV';
-  } else url = '/key/' + k;
   try {
-    const r = await fetch(url, { method: 'POST' });
-    if (!r.ok) throw new Error(destino === 'la TV' ? await r.text() : '');
-    setEstado('✓ ' + k.replace('TV:', ''));
-  } catch (e) { setEstado(e.message || ('Sin conexión con ' + destino), true); }
+    const r = await fetch('/d/' + actual.id + '/key/' + k, { method: 'POST' });
+    if (!r.ok) throw new Error(await r.text());
+    setEstado('✓ ' + k);
+    if (k.startsWith('Volume')) refrescarVolumen();
+  } catch (e) { setEstado(e.message || ('Sin conexión con ' + actual.nombre), true); }
 }
 
 document.querySelectorAll('[data-k]').forEach(b => {
@@ -199,7 +219,7 @@ async function enviarTexto() {
   const t = inp.value; if (!t) return;
   setEstado('Enviando texto...');
   try {
-    const r = await fetch('/text?t=' + encodeURIComponent(t), { method: 'POST' });
+    const r = await fetch('/d/' + actual.id + '/text?t=' + encodeURIComponent(t), { method: 'POST' });
     if (!r.ok) throw 0;
     inp.value = ''; setEstado('✓ Texto enviado');
   } catch { setEstado('Error al enviar texto', true); }
@@ -209,19 +229,24 @@ inp.addEventListener('keydown', e => { if (e.key === 'Enter') enviarTexto(); });
 
 let appsCargadas = false;
 document.getElementById('detApps').addEventListener('toggle', async e => {
-  if (!e.target.open || appsCargadas) return;
-  const cont = document.getElementById('apps');
+  if (!e.target.open || appsCargadas || !actual) return;
+  const cont = document.getElementById('apps'), id = actual.id;
   cont.textContent = 'Cargando...';
   try {
-    const xml = new DOMParser().parseFromString(await (await fetch('/apps')).text(), 'text/xml');
+    const apps = await (await fetch('/d/' + id + '/apps')).json();
     cont.textContent = '';
-    xml.querySelectorAll('app').forEach(a => {
+    apps.forEach(a => {
       const b = document.createElement('button');
-      b.title = a.textContent;
-      const img = document.createElement('img');
-      img.src = '/icon/' + a.getAttribute('id'); img.alt = a.textContent; img.loading = 'lazy';
-      b.appendChild(img);
-      b.addEventListener('click', () => { fetch('/launch/' + a.getAttribute('id'), { method: 'POST' }); setEstado('Abriendo ' + a.textContent); });
+      b.title = a.name;
+      if (a.icon) {
+        const img = document.createElement('img');
+        img.src = '/d/' + id + '/icon/' + a.id; img.alt = a.name; img.loading = 'lazy';
+        b.appendChild(img);
+      } else { b.textContent = a.name; b.style.background = 'var(--btn)'; b.style.fontSize = '14px'; }
+      b.addEventListener('click', async () => {
+        const r = await fetch('/d/' + id + '/launch/' + encodeURIComponent(a.id), { method: 'POST' });
+        setEstado(r.ok ? 'Abriendo ' + a.name : await r.text(), !r.ok);
+      });
       cont.appendChild(b);
     });
     appsCargadas = true;

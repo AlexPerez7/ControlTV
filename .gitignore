@@ -6,3 +6,5 @@ tv_ip.txt
 # Si algun dia se generan certificados o claves
 *.pem
 *.key
+# Dispositivos agregados a mano (IPs de tu red)
+dispositivos.json
