@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -81,7 +82,7 @@ final class AndroidTV extends Driver {
     @Override String marca() { return "Android TV"; }
 
     @Override String[] caps() {  // sin red: no bloquea /devices
-        return pareado ? new String[] {"keys", "volume", "apps"} : new String[] {"pair"};
+        return pareado ? new String[] {"keys", "volume", "apps", "link"} : new String[] {"pair"};
     }
 
     @Override String[] teclas() { return TECLAS.keySet().toArray(new String[0]); }
@@ -418,6 +419,20 @@ final class AndroidTV extends Driver {
         JSONArray a = new JSONArray();
         for (String n : APPS.keySet()) a.put(new JSONObject().put("id", n).put("name", n).put("icon", false).put("color", COLORES.get(n)));
         return a;
+    }
+
+    private static final Pattern YOUTUBE = Pattern.compile(
+            "(?:youtu\\.be/|youtube\\.com/(?:watch\\?(?:.*&)?v=|shorts/|live/|embed/))([A-Za-z0-9_-]{11})");
+
+    /** Los enlaces de YouTube pasan al esquema propio de la app (los https:// generales hacen que Android pregunte "Abrir con"). */
+    static String enlaceTv(String url) {
+        java.util.regex.Matcher m = YOUTUBE.matcher(url);
+        return m.find() ? "vnd.youtube://" + m.group(1) : url;
+    }
+
+    @Override void abrir(String url) throws Exception {
+        if (url == null || !url.matches("https?://\\S{1,500}")) throw new DriverError("Enlace no valido");
+        mandar(f(90, f(1, enlaceTv(url))));
     }
 
     @Override void launch(String appId) throws Exception {

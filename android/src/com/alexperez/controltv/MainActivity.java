@@ -28,12 +28,15 @@ public class MainActivity extends Activity {
     private static final String HOST = "controltv.local";
     private static final String PERMISO_RED_LOCAL = "android.permission.ACCESS_LOCAL_NETWORK";
     private final Api api = new Api();
+    /** Enlace recibido por "Compartir"; la web lo muestra y espera a que el usuario lo envie a la TV. */
+    private volatile String compartido = "";
     private WebView web;
 
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         AndroidTV.contexto = getApplicationContext();
+        leerCompartido(getIntent());
         web = new WebView(this);
         web.setBackgroundColor(0xFF14161A);
         WebSettings s = web.getSettings();
@@ -91,12 +94,33 @@ public class MainActivity extends Activity {
         web.loadUrl("http://" + HOST + "/");  // si se denego, la web mostrara "Sin dispositivos"
     }
 
+    /** Si llega por "Compartir" (ACTION_SEND), guarda el primer enlace http(s) del texto. */
+    private void leerCompartido(android.content.Intent i) {
+        if (i == null || !android.content.Intent.ACTION_SEND.equals(i.getAction())) return;
+        String t = i.getStringExtra(android.content.Intent.EXTRA_TEXT);
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("https?://\\S+").matcher(t == null ? "" : t);
+        if (m.find() && m.group().length() <= 500) compartido = m.group();
+    }
+
+    @Override
+    protected void onNewIntent(android.content.Intent i) {
+        super.onNewIntent(i);
+        leerCompartido(i);
+        web.loadUrl("http://" + HOST + "/");  // recarga: la web muestra el enlace pendiente
+    }
+
     /** La web avisa si la TV elegida admite volumen (aplicarCaps en index.html). */
     private volatile boolean tvConVolumen = false;
 
     private final class Puente {
         @android.webkit.JavascriptInterface
         public void volumen(boolean si) { tvConVolumen = si; }
+
+        @android.webkit.JavascriptInterface
+        public String compartido() { return compartido; }
+
+        @android.webkit.JavascriptInterface
+        public void limpiarCompartido() { compartido = ""; }
     }
 
     /** Los botones de volumen del celular controlan la TV elegida si esta soporta volumen; si no, quedan para el celular. */

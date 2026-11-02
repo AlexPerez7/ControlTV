@@ -24,6 +24,9 @@ y la interfaz muestra solo los botones que soporta. `servidor.ps1` es la version
   asi lo emparejado desde el PC sirve en el celular. `build.sh` la copia a assets.
 - Abrir apps con enlaces `https://` genericos hace que Android pregunte "Abrir con" (Downloader tambien lo reclama).
   Usar esquemas propios: YouTube `vnd.youtube://` (probado), Netflix `nflx://www.netflix.com` (cambiado, sin confirmar). Falta Prime/Disney+/Max.
+- Compartir enlaces: `POST /d/<id>/open?u=<url>`; los de YouTube se convierten a `vnd.youtube://<id>` (con `https://` Android preguntaria "Abrir con").
+  Para simular un Compartir sin tocar la TV: `adb shell "am start -n com.alexperez.controltv/.MainActivity -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT 'texto https://...'"`
+  (las comillas dobles por fuera son necesarias: sin ellas el texto se parte en palabras).
 - Ojo: `pkill -f "servidor.py ..."` desde Bash se mata a si mismo; usar `pkill -f "[s]ervidor.py ..."`.
 
 ### Hisense: lo descubierto (nov 2026)
@@ -146,7 +149,7 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
       (`remote_set_volume_level`); con eso se activa la capacidad `volume` y se ve el número como en la Hisense.
 - [x] **A** · (hecho y probado en la Caixun) App Android: **botones de volumen del celular** controlan la TV elegida (`onKeyDown` de VOLUME_UP/DOWN).
 - [ ] **B** · Android TV: **escribir texto** (mensaje `remote_ime_batch_edit`), para búsquedas y contraseñas.
-- [ ] **B** · App Android: **"Compartir con Control TV"**: compartir un video de YouTube desde el celular y que se abra en la TV
+- [x] **B** · (hecho; el panel se vio bien en el celular, **falta probar el envío a la TV**: `vnd.youtube://<id>` con un id real) App Android: **"Compartir con Control TV"**: compartir un video de YouTube desde el celular y que se abra en la TV
       (filtro de intents `SEND` + `launch` con el enlace).
 - [x] **B** · (hecho, sin probar en la TV: panel "Más botones" con Fuente, Ajustes, Menú, Guía, CH +/− y números) Más teclas en Android TV: entrada/fuente (`KEYCODE_TV_INPUT`), ajustes, canal +/-, teclado numérico.
 - [ ] **B** · Encender por red: **Wake-on-LAN** (la MAC se puede sacar de la tabla ARP durante el escaneo) para TV que apagan el

@@ -145,6 +145,10 @@ class Handler(BaseHTTPRequestHandler):
                 d.text(t)
                 print(f"  {d.nombre}: texto {t!r}")
                 return self.responder(204)
+            if metodo == "POST" and accion == "open":
+                d.abrir(q.get("u", [""])[0])
+                print(f"  {d.nombre}: abrir enlace")
+                return self.responder(204)
             if metodo == "POST" and accion == "pair" and arg:
                 d.pair(arg)
                 return self.responder(204)

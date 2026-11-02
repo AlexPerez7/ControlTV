@@ -35,6 +35,9 @@ abstract class Driver {
     void launch(String appId) throws Exception { throw new DriverError("Este dispositivo no admite abrir apps"); }
     Net.Resp icon(String appId) throws Exception { throw new DriverError("Sin iconos"); }
     JSONObject estado() throws Exception { return new JSONObject(); }
+    /** Abre un enlace (p. ej. un video compartido) en el dispositivo. */
+    void abrir(String url) throws Exception { throw new DriverError("Este dispositivo no admite abrir enlaces"); }
+
     /** Teclas que admite (la web oculta las demas), o null si admite todas. */
     String[] teclas() { return null; }
 

@@ -86,6 +86,20 @@ class Emparejamiento(unittest.TestCase):
         tv._paired = True
         self.assertIn("volume", tv.caps)
 
+    def test_enlaces_de_youtube_al_esquema_propio(self):
+        casos = {"https://youtu.be/dQw4w9WgXcQ?si=abc": "vnd.youtube://dQw4w9WgXcQ",
+                 "https://www.youtube.com/watch?v=dQw4w9WgXcQ": "vnd.youtube://dQw4w9WgXcQ",
+                 "https://www.youtube.com/watch?list=PL1&v=dQw4w9WgXcQ&t=5": "vnd.youtube://dQw4w9WgXcQ",
+                 "https://m.youtube.com/shorts/dQw4w9WgXcQ": "vnd.youtube://dQw4w9WgXcQ",
+                 "https://example.com/video": "https://example.com/video"}
+        for entrada, esperado in casos.items():
+            self.assertEqual(d.AndroidTV.enlace_tv(entrada), esperado, entrada)
+
+    def test_abrir_rechaza_enlaces_raros(self):
+        for malo in ("", "javascript:alert(1)", "intent://x#Intent;end", "file:///etc/passwd", "https://a b"):
+            with self.assertRaisesRegex(d.DriverError, "no valido"):
+                self.tv().abrir(malo)
+
     def test_teclas_desconocidas(self):
         with self.assertRaisesRegex(d.DriverError, "no disponible"):
             self.tv().key("Inventada")

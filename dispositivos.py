@@ -67,6 +67,10 @@ class Driver:
     def pair(self, arg: str):
         raise DriverError("Este dispositivo no necesita emparejarse")
 
+    def abrir(self, url: str):
+        """Abre un enlace (p. ej. un video compartido) en el dispositivo."""
+        raise DriverError("Este dispositivo no admite abrir enlaces")
+
     def preparar(self):
         """Comprobaciones lentas por red que se hacen al escanear (fuera del lock del servidor)."""
 
@@ -372,7 +376,7 @@ class AndroidTV(Driver):
 
     @property
     def caps(self):  # sin red: el estado lo fija preparar() al escanear
-        return ("keys", "volume", "apps") if self._paired else ("pair",)
+        return ("keys", "volume", "apps", "link") if self._paired else ("pair",)
 
     @property
     def teclas(self):
@@ -624,6 +628,20 @@ class AndroidTV(Driver):
         if app_id not in self.APPS:
             raise DriverError("App no soportada")
         self._mandar(_pb((90, _pb((1, self.APPS[app_id])))))
+
+    _YOUTUBE = re.compile(r"(?:youtu\.be/|youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|live/|embed/))([A-Za-z0-9_-]{11})")
+
+    @classmethod
+    def enlace_tv(cls, url):
+        """Los enlaces de YouTube pasan al esquema propio de la app (los https:// generales hacen que
+        Android pregunte "Abrir con"; ver plan.md). Lo demas se manda tal cual."""
+        m = cls._YOUTUBE.search(url)
+        return "vnd.youtube://" + m.group(1) if m else url
+
+    def abrir(self, url):
+        if not re.fullmatch(r"https?://\S{1,500}", url or ""):
+            raise DriverError("Enlace no valido")
+        self._mandar(_pb((90, _pb((1, self.enlace_tv(url))))))
 
 
 # Orden de deteccion; Vestel no se autodetecta.
