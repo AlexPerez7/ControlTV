@@ -23,7 +23,10 @@ y la interfaz muestra solo los botones que soporta. `servidor.ps1` es la version
   usa la misma desde `~/tools/androidtv.p12` (`openssl pkcs12 -export ... -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1`),
   asi lo emparejado desde el PC sirve en el celular. `build.sh` la copia a assets.
 - Abrir apps con enlaces `https://` genericos hace que Android pregunte "Abrir con" (Downloader tambien lo reclama).
-  Usar esquemas propios: YouTube `vnd.youtube://` (probado), Netflix `nflx://www.netflix.com` (cambiado, sin confirmar). Falta Prime/Disney+/Max.
+  Usar esquemas propios: YouTube `vnd.youtube://` y Netflix `nflx://www.netflix.com` (probados, abren directo; YouTube con id de video tambien).
+  Probado en la Caixun: Prime Video (`https://app.primevideo.com`) pregunto "Abrir con" y se resolvio marcando "Siempre"; Disney+ abrio directo;
+  `https://www.max.com` abrio **Downloader** (la app se llama **HBO Max** y no reclama ese enlace) -> ahora `hbo-max` = `https://play.hbomax.com`, que pregunto "Abrir con" una vez y se resolvio con "Siempre".
+  Si una app nueva abre Downloader o pregunta, elegir la app y marcar "Siempre", o desinstalar Downloader. Los ids de app van en la URL: solo `[\w.-]` (`prime-video`, `disney-plus`); con espacio o `+` daba 404.
 - Compartir enlaces: `POST /d/<id>/open?u=<url>`; los de YouTube se convierten a `vnd.youtube://<id>` (con `https://` Android preguntaria "Abrir con").
   Para simular un Compartir sin tocar la TV: `adb shell "am start -n com.alexperez.controltv/.MainActivity -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT 'texto https://...'"`
   (las comillas dobles por fuera son necesarias: sin ellas el texto se parte en palabras).
@@ -85,6 +88,19 @@ Se extrajo y analizo con REA (`rea`, JADX) lo que hay en el movil; ningun protoc
 - [ ] Mantener la pantalla encendida mientras se usa el control, y mostrar la app activa (`/query/active-app`).
 - [ ] Probar en el celular la instalación en pantalla de inicio (con HTTP puede abrirse con la barra del navegador).
 
+## Instalar la app en otros celulares (familia)
+
+- El APK se genera con `source ~/tools/env.sh && bash android/build.sh` y queda en `android/build/ControlTV.apk` (ignorado por git).
+  Subir `versionCode`/`versionName` en `android/AndroidManifest.xml` en cada versión que se reparta (hoy 2 / 1.1).
+- Se pasa por WhatsApp, Drive o USB. En el celular de destino hay que permitir "Instalar apps desconocidas" para la app desde la que se abre
+  el archivo. Requiere Android 8 o superior (`minSdk` 26), WiFi de la misma red que las TV y aceptar el permiso de red local si lo pide.
+- **Respaldar `~/tools/controltv.keystore`** (copia fuera del PC): las actualizaciones solo se instalan encima si van firmadas con la misma
+  clave; si se pierde, cada celular tendría que desinstalar e instalar de nuevo. La clave está en `build.sh` (`controltv`), así que no protege nada:
+  solo identifica al autor.
+- **Ojo:** el APK lleva dentro la identidad TLS de las Android TV (`androidtv.p12`). Es lo que permite que la Caixun ya emparejada funcione en
+  todos los celulares sin repetir el código, pero quien tenga el APK puede controlar esas TV desde su WiFi. Repartirlo solo a la familia
+  (ver "clave por celular en el Android Keystore" más abajo, que lo resolvería).
+
 ## Mejoras propuestas (análisis del código, nov 2026)
 
 Prioridad: **A** = arreglo o mejora con mucho impacto y poco trabajo, **B** = conviene, **C** = idea a futuro.
@@ -138,20 +154,26 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
 - [x] **B** · (hecho: `:8008/setup/eureka_info` → "AiPlus2K") Nombre real de la TV: hoy la Caixun sale como "Android TV". La propia TV lo envía al conectar (`remote_configure`
       trae fabricante y modelo) y también responde en `http://IP:8008/setup/eureka_info`.
 - [x] **B** · (hecho: color y logo SVG propio simplificado de YouTube, Netflix, Prime Video, Disney+, Max y Spotify, en `LOGOS` de index.html; revisado con una captura de Firefox) Apps sin icono en Android TV y Hisense: usar iconos/colores propios (SVG pequeños en la web) en lugar de texto.
-- [x] **B** · (hecho, **sin probar en la TV**: 19 pruebas Python + simulación de la lógica de la web en Node; `POST /d/<id>/key/<tecla>?accion=start|end`, el driver suelta solo a los 5 s) Pulsación larga real: en Android TV mandar `START_LONG`/`END_LONG` al mantener OK (abre menús contextuales),
+- [x] **B** · (hecho y **probado en la Caixun**: mantener la flecha derecha 3 s desplaza varias posiciones y se detiene al soltar; mantener OK sobre un video de YouTube abre su menú contextual con **3 s** (con 1,5 s la TV lo tomó como un toque y abrió el video); 19 pruebas Python + simulación de la lógica de la web en Node; `POST /d/<id>/key/<tecla>?accion=start|end`, el driver suelta solo a los 5 s) Pulsación larga real: en Android TV mandar `START_LONG`/`END_LONG` al mantener OK (abre menús contextuales),
       en vez de repetir pulsaciones cortas.
 - [ ] **B** · Gestos: zona táctil para deslizar (como la app Google TV) como alternativa a las flechas.
-- [ ] **C** · Accesibilidad: `user-scalable=no` impide hacer zoom y los botones con solo emoji no tienen `aria-label`.
+- [ ] **C** · Accesibilidad: `user-scalable=no` impide hacer zoom. (Hecho: los emojis se reemplazaron por iconos SVG propios en un sprite al inicio de `index.html` y los botones de solo icono llevan `aria-label`.)
 - [ ] **C** · Diseño horizontal/tablet (hoy la columna mide como máximo 420 px) y tema claro.
 
 ### Funciones nuevas
 - [x] **A** · (hecho: la Caixun ahora tenia sin botones de volumen) Android TV: **volumen visible**. La TV envía por la misma conexión el nivel, el máximo y el mute
       (`remote_set_volume_level`); con eso se activa la capacidad `volume` y se ve el número como en la Hisense.
 - [x] **A** · (hecho y probado en la Caixun) App Android: **botones de volumen del celular** controlan la TV elegida (`onKeyDown` de VOLUME_UP/DOWN).
-- [x] **B** · (hecho como teclas, **sin probar en la TV**: solo minúsculas, números y `. , - = / ; ' @ +`; las tildes se quitan y se avisa de lo omitido. Falta la vía IME para mayúsculas/Unicode: requiere ver con la TV el mensaje `remote_ime_key_inject` (campo 20) para conocer los contadores) Android TV: **escribir texto** (mensaje `remote_ime_batch_edit`), para búsquedas y contraseñas.
+- [x] **B** · Android TV: **escribir texto**. Hecho con el mensaje de edición IME (campo 21), **probado en YouTube TV (Caixun)**: inserta en el cursor, letras, números, espacios y mayúsculas funcionan.
+      Por teclas **no sirve**: entran como teclado numérico y solo se convierten en caracteres los dígitos. Quedan limitaciones del campo de YouTube TV, sin resolver:
+      los no ASCII se pierden (por eso `a_ascii` quita tildes y avisa de lo omitido), los signos que piden Shift fallan (`!`→`1`, `?`→`¿`; sí funcionó `?` una vez)
+      y **`?` activa la búsqueda por voz** de YouTube TV (comprobado mandándolo solo; no es una tecla de voz nuestra) además de escribirse. Por eso `SIGNOS_CON_SHIFT`
+      (`!@#$%^&*()_+{}|:"<>?~`) se **omiten y se avisa**. Ideas: probar en otro campo (Netflix, WiFi) por si ahí sí funcionan; mandar los símbolos de uno en uno.
+      ⌫ con el campo vacío actúa como **Atrás** (comportamiento normal de Android TV): si se sigue pulsando sale de la pantalla y puede cerrar la app.
+      Con ⌫: 14 pulsaciones seguidas cada 150 ms perdieron 1; **mantener ⌫ en un campo de búsqueda lo vacía y salta a la búsqueda por voz** (no repetir).
 - [x] **B** · (hecho; el panel se vio bien en el celular, **falta probar el envío a la TV**: `vnd.youtube://<id>` con un id real) App Android: **"Compartir con Control TV"**: compartir un video de YouTube desde el celular y que se abra en la TV
       (filtro de intents `SEND` + `launch` con el enlace).
-- [x] **B** · (hecho, sin probar en la TV: panel "Más botones" con Fuente, Ajustes, Menú, Guía, CH +/− y números) Más teclas en Android TV: entrada/fuente (`KEYCODE_TV_INPUT`), ajustes, canal +/-, teclado numérico.
+- [x] **B** · (hecho; probado en la Caixun: **Fuente no hace nada** y **CH + no hace nada dentro de YouTube**; Ajustes, Menú, Guía y números sin probar) Más teclas en Android TV: entrada/fuente (`KEYCODE_TV_INPUT`), ajustes, canal +/-, teclado numérico.
 - [ ] **B** · Encender por red: **Wake-on-LAN** (la MAC se puede sacar de la tabla ARP durante el escaneo) para TV que apagan el
       WiFi en reposo.
 - [ ] **C** · App Android: widget o mosaico de ajustes rápidos con Pausa, Volumen y Silencio, sin abrir la app.

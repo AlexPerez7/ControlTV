@@ -151,40 +151,63 @@ class Emparejamiento(unittest.TestCase):
             tv.key_hold("Inventada", "start")
         self.assertEqual(tv.enviados, [])
 
-    def test_texto_a_teclas(self):
-        # h o l a, espacio, 1 2 3: KEYCODE_H=36, O=43, L=40, A=29, SPACE=62, 1=8, 2=9, 3=10
-        codigos, omitidos = d.AndroidTV.teclas_de_texto("hola 123")
-        self.assertEqual(codigos, [36, 43, 40, 29, 62, 8, 9, 10])
-        self.assertEqual(omitidos, "")
+    def test_mensaje_de_texto_coincide_con_el_probado_en_la_tv(self):
+        # Bytes enviados a la Caixun (YouTube TV, campo de busqueda enfocado) que escribieron "hola" en el campo.
+        self.assertEqual(d.AndroidTV.mensaje_texto("hola").hex(), "aa0114080010001a0e0801120a080310031a04686f6c61")
 
-    def test_texto_mayusculas_y_tildes(self):
-        a, _ = d.AndroidTV.teclas_de_texto("Ñandú Á")
-        b, _ = d.AndroidTV.teclas_de_texto("nandu a")
-        self.assertEqual(a, b)
+    def test_tildes_se_quitan_y_lo_demas_se_omite(self):
+        # En la Caixun (YouTube TV) "Hola Ñandú Árbol?" llego como "Hola and rbol?": los no ASCII se pierden
+        self.assertEqual(d.AndroidTV.a_ascii("Hola Ñandú Árbol"), ("Hola Nandu Arbol", ""))
+        self.assertEqual(d.AndroidTV.a_ascii("¿qué €5?"), ("que 5", "¿€?"))
+        # "?" activa la busqueda por voz y "!" llega como "1": los signos con Shift no se mandan
+        self.assertEqual(d.AndroidTV.a_ascii("a?b!c@d"), ("abcd", "?!@"))
+        self.assertEqual(d.AndroidTV.a_ascii("a-b.c,d/e;f=g'h"), ("a-b.c,d/e;f=g'h", ""))
 
-    def test_texto_omite_lo_que_no_se_puede(self):
-        codigos, omitidos = d.AndroidTV.teclas_de_texto("¿qué? ¡hola!😀")
-        self.assertEqual(omitidos, "¿?¡!😀")
-        self.assertEqual(codigos, d.AndroidTV.teclas_de_texto("que hola")[0])
-
-    def test_texto_se_envia_tecla_a_tecla(self):
+    def test_texto_se_manda_sin_tildes(self):
         tv = self.tv_capturando()
-        tv.PAUSA_TECLA = 0
-        tv.text("ab 1")
-        self.assertEqual(tv.enviados, [self.inyeccion_codigo(29), self.inyeccion_codigo(30),
-                                       self.inyeccion_codigo(62), self.inyeccion_codigo(8)])
-        self.assertEqual(tv.omitidos("ab 1"), "")
+        tv.text("Ñandú")
+        self.assertEqual(tv.enviados, [d.AndroidTV.mensaje_texto("Nandu")])
+        self.assertEqual(tv.omitidos("¿Ñandú?"), "¿?")
+        with self.assertRaisesRegex(d.DriverError, "No hay texto"):
+            tv.text("¿¡")
 
-    def inyeccion_codigo(self, code):
-        return d._pb((10, d._pb((1, code), (2, 3))))
+    def test_cursor_cuenta_unidades_utf16(self):
+        # "a😀": 'a' = 1 unidad, el emoji = 2 -> ultima posicion = 2
+        m = d._pb_leer(d._pb_leer(d.AndroidTV.mensaje_texto("a😀"))[21][0])
+        estado = d._pb_leer(d._pb_leer(m[3][0])[2][0])
+        self.assertEqual((estado[1][0], estado[2][0]), (2, 2))
 
-    def test_texto_sin_nada_escribible_o_muy_largo(self):
+    def test_texto_se_manda_en_un_solo_mensaje(self):
         tv = self.tv_capturando()
-        with self.assertRaisesRegex(d.DriverError, "Ningun caracter"):
-            tv.text("¿?!")
+        tv.text("Hola 123?")
+        self.assertEqual(tv.enviados, [d.AndroidTV.mensaje_texto("Hola 123")])
+
+    def test_texto_usa_los_contadores_que_informa_la_tv(self):
+        tv = self.tv_capturando()
+        tv._ime = (7, 3)
+        tv.text("a")
+        self.assertEqual(tv.enviados, [d.AndroidTV.mensaje_texto("a", 7, 3)])
+
+    def test_saltos_de_linea_pasan_a_espacio(self):
+        tv = self.tv_capturando()
+        tv.text("a\nb\r")
+        self.assertEqual(tv.enviados, [d.AndroidTV.mensaje_texto("a b")])
+
+    def test_texto_vacio_o_muy_largo(self):
+        tv = self.tv_capturando()
+        for vacio in ("", "\r"):
+            with self.assertRaisesRegex(d.DriverError, "No hay texto"):
+                tv.text(vacio)
         with self.assertRaisesRegex(d.DriverError, "demasiado largo"):
             tv.text("a" * 201)
         self.assertEqual(tv.enviados, [])
+
+    def test_ids_de_apps_caben_en_la_ruta(self):
+        # servidor.py y Api.java solo aceptan [\w.-]+ en /d/<id>/launch/<app>: un espacio o un "+" dan 404
+        for app_id in d.AndroidTV.APPS:
+            self.assertRegex(app_id, r"^[\w.-]+$")
+        self.assertEqual([a["name"] for a in self.tv().apps()][2:4], ["Prime Video", "Disney+"])
+        self.assertIn("HBO Max", [a["name"] for a in self.tv().apps()])
 
     def test_teclas_desconocidas(self):
         with self.assertRaisesRegex(d.DriverError, "no disponible"):

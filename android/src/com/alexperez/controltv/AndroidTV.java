@@ -45,8 +45,7 @@ final class AndroidTV extends Driver {
     private static X509Certificate certCliente;
 
     private static final Map<String, Integer> TECLAS = new HashMap<>();
-    private static final Map<String, String> APPS = new LinkedHashMap<>();
-    private static final Map<String, String> COLORES = new HashMap<>();
+    private static final Map<String, String[]> APPS = new LinkedHashMap<>();
     static {
         String[] k = {"Up", "Down", "Left", "Right", "Select", "Back", "Home", "Power", "PowerOff", "PowerOn",
                 "VolumeUp", "VolumeDown", "VolumeMute", "Play", "Rev", "Fwd", "Info", "Search", "Enter", "Backspace", "InstantReplay",
@@ -55,18 +54,13 @@ final class AndroidTV extends Driver {
                 178, 176, 172, 82, 166, 167};
         for (int i = 0; i < k.length; i++) TECLAS.put(k[i], v[i]);
         for (int n = 0; n < 10; n++) TECLAS.put("Num" + n, 7 + n);  // KEYCODE_0..9
-        APPS.put("YouTube", "vnd.youtube://");
-        APPS.put("Netflix", "nflx://www.netflix.com");
-        APPS.put("Prime Video", "https://app.primevideo.com");
-        APPS.put("Disney+", "https://www.disneyplus.com");
-        APPS.put("Max", "https://www.max.com");
-        APPS.put("Spotify", "spotify://");
-        COLORES.put("YouTube", "#c4302b");
-        COLORES.put("Netflix", "#b20710");
-        COLORES.put("Prime Video", "#0a7bb5");
-        COLORES.put("Disney+", "#113ccf");
-        COLORES.put("Max", "#5822b4");
-        COLORES.put("Spotify", "#1a9c47");
+        // id (va en la URL: solo letras, numeros, - . _) -> {nombre que se muestra, enlace que abre la app, color}
+        APPS.put("youtube", new String[] {"YouTube", "vnd.youtube://", "#c4302b"});
+        APPS.put("netflix", new String[] {"Netflix", "nflx://www.netflix.com", "#b20710"});
+        APPS.put("prime-video", new String[] {"Prime Video", "https://app.primevideo.com", "#0a7bb5"});
+        APPS.put("disney-plus", new String[] {"Disney+", "https://www.disneyplus.com", "#113ccf"});
+        APPS.put("hbo-max", new String[] {"HBO Max", "https://play.hbomax.com", "#5822b4"});
+        APPS.put("spotify", new String[] {"Spotify", "spotify://", "#1a9c47"});
     }
 
     private volatile boolean pareado;         // lo fija preparar() al escanear y el emparejamiento
@@ -351,6 +345,10 @@ final class AndroidTV extends Driver {
                     volMax = (int) entero(v, 6, 0);
                     volMute = (int) entero(v, 8, 0);
                     volNivel = (int) entero(v, 7, 0);
+                } else if (m.containsKey(21)) {  // la TV informa los contadores de su campo de texto
+                    Map<Integer, List<Object>> v = leer((byte[]) m.get(21).get(0));
+                    imeContador = (int) entero(v, 1, 0);
+                    imeCampo = (int) entero(v, 2, 0);
                 } else if (m.containsKey(8)) {   // ping
                     long v = entero(leer((byte[]) m.get(8).get(0)), 1, 0);
                     enviar(s, f(9, f(1, v)));
@@ -419,45 +417,52 @@ final class AndroidTV extends Driver {
         inyectar(k, CORTA);
     }
 
-    // Texto como teclas: KEYCODE_A..Z = 29..54, 0..9 = 7..16 y algunos signos sin Shift. Las mayusculas se escriben en
-    // minuscula y las tildes se quitan (buscar no las distingue); lo demas se omite y se avisa.
-    private static final String PUNTUACION = " ,.-=/;'@+";
-    private static final int[] CODIGOS_PUNTUACION = {62, 55, 56, 69, 70, 76, 74, 75, 77, 81};
-    private static final long PAUSA_TECLA_MS = 20;  // para que la TV no pierda ninguna tecla
+    // Texto: mensaje de edicion (IME) del protocolo, el mismo que usa la app Google TV. Las teclas NO sirven: entran como
+    // teclado numerico y Android solo convierte los digitos en caracteres. Comprobado en la Caixun (YouTube TV): inserta el
+    // texto en la posicion del cursor del campo enfocado, con mayusculas, tildes y cualquier simbolo.
     private static final int MAX_TEXTO = 200;
+    private volatile int imeContador = 0, imeCampo = 0;  // contadores que informa la TV (0 mientras no haya)
 
-    /** Escribe en `codigos` las teclas para `texto` y devuelve los caracteres que no se pueden escribir. */
-    static String teclasDeTexto(String texto, List<Integer> codigos) {
-        StringBuilder omitidos = new StringBuilder();
+    /** RemoteMessage.remote_ime_batch_edit (21) que inserta `texto`. */
+    static byte[] mensajeTexto(String texto, int ime, int campo) {
+        int cursor = Math.max(texto.length() - 1, 0);  // String de Java ya cuenta en unidades UTF-16, como Android
+        byte[] estado = cat(f(1, cursor), f(2, cursor), f(3, texto));
+        return f(21, cat(f(1, ime), f(2, campo), f(3, cat(f(1, 1), f(2, estado)))));
+    }
+
+    /**
+     * El campo de YouTube TV descarta los caracteres no ASCII (probado: "Ñandú" llego como "and"): se escribe la letra base
+     * (ñ -> n, é -> e). Devuelve el texto en ASCII; lo que no tiene equivalente (¿, ¡, €...) se agrega a `omitidos`.
+     */
+    // Signos que piden Shift: la TV los escribe sin Shift ("!" llego como "1") y "?" activa la busqueda por voz de YouTube TV
+    // (probado en la Caixun). Se omiten y se avisa, en vez de arriesgarse a escribir otro caracter en silencio.
+    private static final String SIGNOS_CON_SHIFT = "!@#$%^&*()_+{}|:\"<>?~";
+
+    static String aAscii(String texto, StringBuilder omitidos) {
+        StringBuilder out = new StringBuilder();
         String nfd = java.text.Normalizer.normalize(texto, java.text.Normalizer.Form.NFD);
         for (int i = 0; i < nfd.length(); ) {
             int cp = nfd.codePointAt(i);
             i += Character.charCount(cp);
             if (Character.getType(cp) == Character.NON_SPACING_MARK) continue;  // tilde suelta
-            int c = Character.toLowerCase(cp);
-            int p = c < 128 ? PUNTUACION.indexOf((char) c) : -1;
-            if (c >= 'a' && c <= 'z') codigos.add(29 + c - 'a');
-            else if (c >= '0' && c <= '9') codigos.add(7 + c - '0');
-            else if (p >= 0) codigos.add(CODIGOS_PUNTUACION[p]);
-            else {
-                String ch = new String(Character.toChars(cp));
-                if (omitidos.indexOf(ch) < 0) omitidos.append(ch);
-            }
+            if (cp < 128 && SIGNOS_CON_SHIFT.indexOf(cp) < 0) { out.appendCodePoint(cp); continue; }
+            String ch = new String(Character.toChars(cp));
+            if (omitidos.indexOf(ch) < 0) omitidos.append(ch);
         }
-        return omitidos.toString();
+        return out.toString();
     }
 
-    @Override String omitidos(String t) { return teclasDeTexto(t, new ArrayList<Integer>()); }
+    @Override String omitidos(String t) {
+        StringBuilder om = new StringBuilder();
+        aAscii(t, om);
+        return om.toString();
+    }
 
     @Override void text(String t) throws Exception {
+        t = aAscii(t.replace("\r", "").replace("\n", " "), new StringBuilder());
+        if (t.isEmpty()) throw new DriverError("No hay texto que escribir (la TV solo acepta caracteres ASCII; las tildes se quitan)");
         if (t.length() > MAX_TEXTO) throw new DriverError("Texto demasiado largo (maximo " + MAX_TEXTO + " caracteres)");
-        List<Integer> codigos = new ArrayList<>();
-        teclasDeTexto(t, codigos);
-        if (codigos.isEmpty()) throw new DriverError("Ningun caracter se puede escribir en esta TV (solo letras, numeros y . , - = / ; ' @ +)");
-        for (int i = 0; i < codigos.size(); i++) {
-            if (i > 0) Thread.sleep(PAUSA_TECLA_MS);
-            mandar(f(10, cat(f(1, codigos.get(i)), f(2, CORTA))));
-        }
+        mandar(mensajeTexto(t, imeContador, imeCampo));
     }
 
     @Override boolean largo() { return true; }
@@ -504,7 +509,9 @@ final class AndroidTV extends Driver {
 
     @Override JSONArray apps() throws Exception {
         JSONArray a = new JSONArray();
-        for (String n : APPS.keySet()) a.put(new JSONObject().put("id", n).put("name", n).put("icon", false).put("color", COLORES.get(n)));
+        for (Map.Entry<String, String[]> e : APPS.entrySet()) {
+            a.put(new JSONObject().put("id", e.getKey()).put("name", e.getValue()[0]).put("icon", false).put("color", e.getValue()[2]));
+        }
         return a;
     }
 
@@ -523,8 +530,8 @@ final class AndroidTV extends Driver {
     }
 
     @Override void launch(String appId) throws Exception {
-        String link = APPS.get(appId);
-        if (link == null) throw new DriverError("App no soportada");
-        mandar(f(90, f(1, link)));
+        String[] app = APPS.get(appId);
+        if (app == null) throw new DriverError("App no soportada");
+        mandar(f(90, f(1, app[1])));
     }
 }

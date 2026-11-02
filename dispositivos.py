@@ -368,9 +368,13 @@ class AndroidTV(Driver):
               "Enter": 66, "Backspace": 67, "InstantReplay": 88,
               "Source": 178, "Settings": 176, "Guide": 172, "Menu": 82, "ChannelUp": 166, "ChannelDown": 167,
               **{f"Num{n}": 7 + n for n in range(10)}}
-    APPS = {"YouTube": "vnd.youtube://", "Netflix": "nflx://www.netflix.com",
-            "Prime Video": "https://app.primevideo.com", "Disney+": "https://www.disneyplus.com",
-            "Max": "https://www.max.com", "Spotify": "spotify://"}
+    # id (va en la URL: solo letras, numeros, - . _) -> (nombre que se muestra, enlace que abre la app, color)
+    APPS = {"youtube": ("YouTube", "vnd.youtube://", "#c4302b"),
+            "netflix": ("Netflix", "nflx://www.netflix.com", "#b20710"),
+            "prime-video": ("Prime Video", "https://app.primevideo.com", "#0a7bb5"),
+            "disney-plus": ("Disney+", "https://www.disneyplus.com", "#113ccf"),
+            "hbo-max": ("HBO Max", "https://play.hbomax.com", "#5822b4"),
+            "spotify": ("Spotify", "spotify://", "#1a9c47")}
     _lock_cert = threading.Lock()
 
     def __init__(self, *a, **kw):
@@ -384,6 +388,7 @@ class AndroidTV(Driver):
         self._conn = threading.RLock()  # protege _sock/_listo (varias peticiones HTTP a la vez)
         self._pair_sock = None
         self._pair_desde = 0.0  # cuando se mostro el codigo en la TV (caduca a los 2 min)
+        self._ime = (0, 0)  # contadores (ime, campo) de la ultima edicion de texto que informo la TV
         self._vol = None  # (nivel, maximo, silenciado) segun la ultima notificacion de la TV
 
     @property
@@ -563,6 +568,9 @@ class AndroidTV(Driver):
                 elif 50 in m:  # volumen: nivel (7), maximo (6), silenciado (8)
                     v = _pb_leer(m[50][0])
                     self._vol = (v.get(7, [0])[0], v.get(6, [0])[0], bool(v.get(8, [0])[0]))
+                elif 21 in m:  # la TV informa los contadores de su campo de texto: se reutilizan al escribir
+                    v = _pb_leer(m[21][0])
+                    self._ime = (v.get(1, [0])[0], v.get(2, [0])[0])
                 elif 8 in m:  # ping
                     v = _pb_leer(m[8][0]).get(1, [0])[0]
                     self._enviar(s, _pb((9, _pb((1, v)))))
@@ -664,54 +672,51 @@ class AndroidTV(Driver):
         nivel, maximo, mute = self._vol
         return {"volume": nivel, "max": maximo, "muted": mute}
 
-    COLORES = {"YouTube": "#c4302b", "Netflix": "#b20710", "Prime Video": "#0a7bb5", "Disney+": "#113ccf",
-               "Max": "#5822b4", "Spotify": "#1a9c47"}
-
     def apps(self):
-        return [{"id": n, "name": n, "icon": False, "color": self.COLORES.get(n)} for n in self.APPS]
+        return [{"id": i, "name": n, "icon": False, "color": c} for i, (n, _, c) in self.APPS.items()]
 
     def launch(self, app_id):
         if app_id not in self.APPS:
             raise DriverError("App no soportada")
-        self._mandar(_pb((90, _pb((1, self.APPS[app_id])))))
+        self._mandar(_pb((90, _pb((1, self.APPS[app_id][1])))))
 
-    # Texto como teclas: KEYCODE_A..Z = 29..54, 0..9 = 7..16 y algunos signos sin Shift. Las mayusculas se escriben
-    # en minuscula y las tildes se quitan (buscar no las distingue); lo demas se omite y se avisa.
-    PUNTUACION = {" ": 62, ",": 55, ".": 56, "-": 69, "=": 70, "/": 76, ";": 74, "'": 75, "@": 77, "+": 81}
-    PAUSA_TECLA = 0.02  # segundos entre teclas, para que la TV no pierda ninguna
+    # Texto: mensaje de edicion (IME) del protocolo, el mismo que usa la app Google TV. Las teclas NO sirven: entran como
+    # teclado numerico y Android solo convierte los digitos en caracteres. Comprobado en la Caixun (YouTube TV): inserta el
+    # texto en la posicion del cursor del campo enfocado, con mayusculas, tildes y cualquier simbolo.
     MAX_TEXTO = 200
 
+    @staticmethod
+    def mensaje_texto(texto, ime=0, campo=0):
+        """RemoteMessage.remote_ime_batch_edit (21) que inserta `texto` (contadores que informa la TV; 0 si aun no hay)."""
+        cursor = max(len(texto.encode("utf-16-le")) // 2 - 1, 0)  # posiciones en unidades UTF-16, como Android
+        estado = _pb((1, cursor), (2, cursor), (3, texto))
+        return _pb((21, _pb((1, ime), (2, campo), (3, _pb((1, 1), (2, estado))))))
+
+    # Signos que piden Shift: la TV los escribe sin Shift ("!" llego como "1") y "?" **activa la busqueda por voz** de
+    # YouTube TV (probado en la Caixun). Se omiten y se avisa, en vez de arriesgarse a escribir otro caracter en silencio.
+    SIGNOS_CON_SHIFT = frozenset('!@#$%^&*()_+{}|:"<>?~')
+
     @classmethod
-    def teclas_de_texto(cls, texto):
-        """(codigos de tecla, caracteres omitidos) para escribir `texto` como teclas."""
-        codigos, omitidos = [], []
+    def a_ascii(cls, texto):
+        """(texto, omitidos). El campo de YouTube TV descarta los caracteres no ASCII (probado: "Ñandú" llego como "and"),
+        asi que se escribe la letra base (ñ -> n, é -> e); lo que no tiene equivalente (¿, ¡, €...) o pide Shift se omite y se avisa."""
+        salida, omitidos = [], []
         for ch in unicodedata.normalize("NFD", texto):
             if unicodedata.combining(ch):
                 continue
-            c = ch.lower()
-            if len(c) == 1 and "a" <= c <= "z":
-                codigos.append(29 + ord(c) - ord("a"))
-            elif len(c) == 1 and "0" <= c <= "9":
-                codigos.append(7 + int(c))
-            elif c in cls.PUNTUACION:
-                codigos.append(cls.PUNTUACION[c])
-            else:
-                omitidos.append(ch)
-        return codigos, "".join(dict.fromkeys(omitidos))
+            (salida if ord(ch) < 128 and ch not in cls.SIGNOS_CON_SHIFT else omitidos).append(ch)
+        return "".join(salida), "".join(dict.fromkeys(omitidos))
 
     def omitidos(self, t):
-        return self.teclas_de_texto(t)[1]
+        return self.a_ascii(t)[1]
 
     def text(self, t):
+        t, _ = self.a_ascii(t.replace("\r", "").replace("\n", " "))
+        if not t:
+            raise DriverError("No hay texto que escribir (la TV solo acepta caracteres ASCII; las tildes se quitan)")
         if len(t) > self.MAX_TEXTO:
             raise DriverError(f"Texto demasiado largo (maximo {self.MAX_TEXTO} caracteres)")
-        codigos, _ = self.teclas_de_texto(t)
-        if not codigos:
-            raise DriverError("Ningun caracter se puede escribir en esta TV (solo letras, numeros y . , - = / ; ' @ +)")
-        for i, code in enumerate(codigos):
-            if i:
-                time.sleep(self.PAUSA_TECLA)
-            self._mandar(_pb((10, _pb((1, code), (2, self.CORTA)))))
+        self._mandar(self.mensaje_texto(t, *self._ime))
 
     _YOUTUBE = re.compile(r"(?:youtu\.be/|youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|live/|embed/))([A-Za-z0-9_-]{11})")
 
