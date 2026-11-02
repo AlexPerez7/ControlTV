@@ -17,6 +17,15 @@ y la interfaz muestra solo los botones que soporta. `servidor.ps1` es la version
 | onn E58D62UN Vestel (192.168.31.145) | `Vestel` (solo manual) | nada (ver abajo) | ver abajo |
 
 ### Android TV (Caixun): lo descubierto (nov 2026)
+- **Cambiar de entrada (Fuente): sin solución por este protocolo.** La Caixun es una TV con sintonizador, no un reproductor: tiene entradas TV, Composite, HDMI 1-3 y
+  "pantalla de inicio de Android TV". Probado: `Fuente` (KEYCODE_TV_INPUT 178) en el inicio no hace nada y en la entrada de TV abre la **lista de canales**;
+  `Guía` (172) **cambia a la entrada de TV** ("Sin señal") y `Home`/`Back` no vuelven. Se salió con el botón físico Fuente (menú que se cierra a los pocos segundos:
+  TV, Composite, HDMI 1, HDMI 2, HDMI 3, inicio de Android TV; 5 veces abajo y OK). Los botones `Fuente` y `Guía` se quitaron de la app.
+  Investigado: es un problema **conocido** ([androidtvremote2 #10](https://github.com/tronikos/androidtvremote2/issues/10): TV_INPUT no funciona; las teclas HDMI solo si el menú ya está abierto).
+  Único camino documentado: enlace `content://android.media.tv/passthrough/<servicio>/HW<n>` por `app_link` (ids según fabricante: MediaTek `com.mediatek.tvinput/.hdmi.HDMIInputService/HW5-8`,
+  TCL `com.tcl.tvinput/.TvPassThroughService/HW15-18`; ver [gist](https://gist.github.com/mcfrojd/9e6875e1db5c089b1e3ddeb7dba0f304) y [hilo HA](https://community.home-assistant.io/t/android-tv-hdmi/234411/64));
+  casi todos se probaron por ADB, no por este protocolo, y el id de esta TV es desconocido (necesita `adb logcat` en la TV o su ajuste de depuración). **Pendiente de probar** con cuidado.
+- `Menú` sin efecto sobre una app del inicio. `Ajustes` y los números sin probar. `https://play.max.com` es el enlace de HBO Max que citan en el [hilo de enlaces de HA](https://community.home-assistant.io/t/android-tv-remote-app-links-deep-linking-guide/567921?page=12).
 - Puertos 6466 (control) y 6467 (pairing), TLS con certificado de cliente + protobuf. La TV muestra un codigo hex de 6 caracteres;
   la clave del pairing es SHA-256(modulo+exponente del cliente, modulo+exponente de la TV, codigo sin su primer byte).
 - La identidad TLS del servidor es `androidtv_cert.pem`/`androidtv_clave.pem` (generada con openssl, ignorada por git). La app Android

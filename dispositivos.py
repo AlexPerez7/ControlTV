@@ -366,7 +366,9 @@ class AndroidTV(Driver):
               "Power": 26, "PowerOff": 223, "PowerOn": 224, "VolumeUp": 24, "VolumeDown": 25,
               "VolumeMute": 164, "Play": 85, "Rev": 89, "Fwd": 90, "Info": 165, "Search": 84,
               "Enter": 66, "Backspace": 67, "InstantReplay": 88,
-              "Source": 178, "Settings": 176, "Guide": 172, "Menu": 82, "ChannelUp": 166, "ChannelDown": 167,
+              # Sin "Source" (178) ni "Guide" (172): en la Caixun Fuente abre la lista de canales y Guia cambia a la entrada
+              # de TV en vivo y deja la TV atascada en "Sin senal" (ver plan.md)
+              "Settings": 176, "Menu": 82, "ChannelUp": 166, "ChannelDown": 167,
               **{f"Num{n}": 7 + n for n in range(10)}}
     # id (va en la URL: solo letras, numeros, - . _) -> (nombre que se muestra, enlace que abre la app, color)
     APPS = {"youtube": ("YouTube", "vnd.youtube://", "#c4302b"),

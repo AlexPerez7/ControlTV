@@ -49,9 +49,9 @@ final class AndroidTV extends Driver {
     static {
         String[] k = {"Up", "Down", "Left", "Right", "Select", "Back", "Home", "Power", "PowerOff", "PowerOn",
                 "VolumeUp", "VolumeDown", "VolumeMute", "Play", "Rev", "Fwd", "Info", "Search", "Enter", "Backspace", "InstantReplay",
-                "Source", "Settings", "Guide", "Menu", "ChannelUp", "ChannelDown"};
+                "Settings", "Menu", "ChannelUp", "ChannelDown"};  // sin Source ni Guide: ver plan.md
         int[] v = {19, 20, 21, 22, 23, 4, 3, 26, 223, 224, 24, 25, 164, 85, 89, 90, 165, 84, 66, 67, 88,
-                178, 176, 172, 82, 166, 167};
+                176, 82, 166, 167};
         for (int i = 0; i < k.length; i++) TECLAS.put(k[i], v[i]);
         for (int n = 0; n < 10; n++) TECLAS.put("Num" + n, 7 + n);  // KEYCODE_0..9
         // id (va en la URL: solo letras, numeros, - . _) -> {nombre que se muestra, enlace que abre la app, color}

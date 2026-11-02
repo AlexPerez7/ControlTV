@@ -170,10 +170,9 @@
   <details id="detMas" class="cap cap-keys" style="display:none">
     <summary><svg class="ic" aria-hidden="true"><use href="#i-keyboard"/></svg> Más botones</summary>
     <div class="row c3">
-      <button data-k="Source">Fuente</button>
       <button data-k="Settings">Ajustes</button>
       <button data-k="Menu">Menú</button>
-      <button data-k="Guide">Guía</button>
+      <span></span>
       <button data-k="ChannelUp" data-rep>CH +</button>
       <button data-k="ChannelDown" data-rep>CH −</button>
     </div>
@@ -227,8 +226,8 @@ function aplicarCaps() {
   // Si el dispositivo declara qué teclas admite, se ocultan los botones de las demás.
   const teclas = actual && actual.teclas;
   document.querySelectorAll('[data-k]').forEach(b => b.classList.toggle('sin-tecla', !!teclas && !teclas.includes(b.dataset.k)));
-  // El panel de fuente/canales/numeros solo existe en dispositivos que declaran esas teclas (hoy: Android TV)
-  document.getElementById('detMas').style.display = teclas && teclas.includes('Source') ? '' : 'none';
+  // El panel de ajustes/canales/numeros solo existe en dispositivos que declaran esas teclas (hoy: Android TV)
+  document.getElementById('detMas').style.display = teclas && teclas.includes('Num0') ? '' : 'none';
   appsCargadas = false; document.getElementById('apps').textContent = '';
   document.getElementById('detApps').open = false;
   document.getElementById('volnum').textContent = '';
