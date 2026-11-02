@@ -122,6 +122,7 @@ final class Api {
                 }
                 if (accion.equals("launch") && arg != null) { d.launch(arg); return OK; }
                 if (accion.equals("pair") && arg != null) { d.pair(arg); return OK; }
+                if (accion.equals("fuente") && arg != null) { d.fuente(arg); return OK; }
                 if (accion.equals("open")) { d.abrir(consulta(query, "u")); return OK; }
             }
             return texto(404, "No encontrado");

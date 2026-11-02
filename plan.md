@@ -17,7 +17,8 @@ y la interfaz muestra solo los botones que soporta. `servidor.ps1` es la version
 | onn E58D62UN Vestel (192.168.31.145) | `Vestel` (solo manual) | nada (ver abajo) | ver abajo |
 
 ### Android TV (Caixun): lo descubierto (nov 2026)
-- **Cambiar de entrada (Fuente): sin solución por este protocolo.** La Caixun es una TV con sintonizador, no un reproductor: tiene entradas TV, Composite, HDMI 1-3 y
+- **Cambiar de entrada (Fuente): RESUELTO** con `app_link` (campo 90) `content://android.media.tv/passthrough/com.mediatek.tvinput%2F<servicio>%2F<HW>` (ids sacados con `adb shell dumpsys tv_input`: TV `.tuner.TunerInputService/HW0`, Composite `.composite.CompositeInputService/HW1`, HDMI1-3 `.hdmi.HDMIInputService/HW4-6`). Probado HDMI1/HDMI2 desde Remote. Volver: `Home` no basta desde una entrada; se abre YouTube y luego `Home` (botón "Inicio"). Los ids son de chips MediaTek: en otra TV pueden no servir. Historial del problema (teclas, que ya no se usan):
+- (antes) sin solución por teclas. La Caixun es una TV con sintonizador, no un reproductor: tiene entradas TV, Composite, HDMI 1-3 y
   "pantalla de inicio de Android TV". Probado: `Fuente` (KEYCODE_TV_INPUT 178) en el inicio no hace nada y en la entrada de TV abre la **lista de canales**;
   `Guía` (172) **cambia a la entrada de TV** ("Sin señal") y `Home`/`Back` no vuelven. Se salió con el botón físico Fuente (menú que se cierra a los pocos segundos:
   TV, Composite, HDMI 1, HDMI 2, HDMI 3, inicio de Android TV; 5 veces abajo y OK). Los botones `Fuente` y `Guía` se quitaron de la app.

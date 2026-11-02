@@ -81,6 +81,8 @@ def ficha(k, d) -> dict:
         f["teclas"] = list(d.teclas)
     if d.largo:
         f["largo"] = True
+    if getattr(d, "fuentes", None):
+        f["fuentes"] = list(d.fuentes)
     return f
 
 
@@ -153,6 +155,10 @@ class Handler(BaseHTTPRequestHandler):
                 omitidos = d.omitidos(t)
                 if omitidos:  # 200 con aviso: se escribio lo posible
                     return self.responder(200, f"Se omitieron: {omitidos}".encode())
+                return self.responder(204)
+            if metodo == "POST" and accion == "fuente" and arg:
+                d.fuente(arg)
+                print(f"  {d.nombre}: fuente {arg}")
                 return self.responder(204)
             if metodo == "POST" and accion == "open":
                 d.abrir(q.get("u", [""])[0])

@@ -43,6 +43,8 @@ abstract class Driver {
 
     /** True si admite mantener una tecla (keyHold). */
     boolean largo() { return false; }
+    String[] fuentes() { return null; }
+    void fuente(String nombre) throws Exception { throw new DriverError("Este dispositivo no admite cambiar de fuente"); }
 
     /** Mantener una tecla: accion "start" al pulsar y "end" al soltar. */
     void keyHold(String k, String accion) throws Exception { throw new DriverError("Este dispositivo no admite mantener teclas"); }
@@ -71,6 +73,7 @@ abstract class Driver {
         String[] t = teclas();
         if (t != null) o.put("teclas", new JSONArray(java.util.Arrays.asList(t)));
         if (largo()) o.put("largo", true);
+        if (fuentes() != null) o.put("fuentes", new JSONArray(java.util.Arrays.asList(fuentes())));
         return o;
     }
 

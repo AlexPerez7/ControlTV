@@ -184,6 +184,12 @@
     </div>
   </details>
 
+  <details id="detFuente" class="cap cap-keys" style="display:none">
+    <summary><svg class="ic" aria-hidden="true"><use href="#i-tv"/></svg> Fuente</summary>
+    <div class="row c3" id="fuentes"></div>
+    <small class="help">Cambia la entrada de la TV. "Inicio" vuelve al menú de Android TV (abre YouTube un instante y pulsa Home). Los nombres de las entradas son los de la Caixun; en otra TV puede no hacer nada.</small>
+  </details>
+
   <details id="detApps" class="cap cap-apps">
     <summary><svg class="ic" aria-hidden="true"><use href="#i-tv"/></svg> Aplicaciones</summary>
     <div class="apps" id="apps"></div>
@@ -228,6 +234,11 @@ function aplicarCaps() {
   document.querySelectorAll('[data-k]').forEach(b => b.classList.toggle('sin-tecla', !!teclas && !teclas.includes(b.dataset.k)));
   // El panel de ajustes/canales/numeros solo existe en dispositivos que declaran esas teclas (hoy: Android TV)
   document.getElementById('detMas').style.display = teclas && teclas.includes('Num0') ? '' : 'none';
+  const fu = (actual && actual.fuentes) || [];
+  document.getElementById('detFuente').style.display = fu.length ? '' : 'none';
+  const cont = document.getElementById('fuentes'); cont.textContent = '';
+  const ETQ = { HDMI1: 'HDMI 1', HDMI2: 'HDMI 2', HDMI3: 'HDMI 3', Composite: 'Compuesto', TV: 'TV', Inicio: 'Inicio' };
+  fu.forEach(n => { const b = document.createElement('button'); b.textContent = ETQ[n] || n; b.onclick = () => fuente(n); cont.appendChild(b); });
   appsCargadas = false; document.getElementById('apps').textContent = '';
   document.getElementById('detApps').open = false;
   document.getElementById('volnum').textContent = '';
@@ -294,6 +305,16 @@ async function key(k) {
     if (!r.ok) throw new Error(await r.text());
     setEstado('✓ ' + k);
     if (k.startsWith('Volume')) setTimeout(refrescarVolumen, 250);  // la TV avisa el nuevo nivel un instante despues
+  } catch (e) { setEstado(e.message || ('Sin conexión con ' + actual.nombre), true); }
+}
+
+async function fuente(n) {
+  if (!actual) return;
+  if (navigator.vibrate) navigator.vibrate(15);
+  try {
+    const r = await fetch('/d/' + actual.id + '/fuente/' + encodeURIComponent(n), { method: 'POST' });
+    if (!r.ok) throw new Error(await r.text());
+    setEstado('✓ ' + n);
   } catch (e) { setEstado(e.message || ('Sin conexión con ' + actual.nombre), true); }
 }
 

@@ -524,6 +524,29 @@ final class AndroidTV extends Driver {
         return m.find() ? "vnd.youtube://" + m.group(1) : url;
     }
 
+    // Entradas TIF de TVs MediaTek (ver AndroidTV en dispositivos.py). "Inicio": abrir una app y luego Home.
+    private static final String[] FUENTES = {"HDMI1", "HDMI2", "HDMI3", "Composite", "TV", "Inicio"};
+    @Override String[] fuentes() { return FUENTES; }
+
+    @Override void fuente(String nombre) throws Exception {
+        if ("Inicio".equals(nombre)) {
+            launch("youtube");
+            Thread.sleep(3000);
+            key("Home");
+            return;
+        }
+        String hw, srv = ".hdmi.HDMIInputService";
+        switch (nombre == null ? "" : nombre) {
+            case "TV": hw = "HW0"; srv = ".tuner.TunerInputService"; break;
+            case "Composite": hw = "HW1"; srv = ".composite.CompositeInputService"; break;
+            case "HDMI1": hw = "HW4"; break;
+            case "HDMI2": hw = "HW5"; break;
+            case "HDMI3": hw = "HW6"; break;
+            default: throw new DriverError("Fuente no valida");
+        }
+        mandar(f(90, f(1, "content://android.media.tv/passthrough/com.mediatek.tvinput%2F" + srv + "%2F" + hw)));
+    }
+
     @Override void abrir(String url) throws Exception {
         if (url == null || !url.matches("https?://\\S{1,500}")) throw new DriverError("Enlace no valido");
         mandar(f(90, f(1, enlaceTv(url))));

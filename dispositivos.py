@@ -81,6 +81,10 @@ class Driver:
         """Abre un enlace (p. ej. un video compartido) en el dispositivo."""
         raise DriverError("Este dispositivo no admite abrir enlaces")
 
+    def fuente(self, nombre: str):
+        """Cambia la entrada de video (HDMI, TV...)."""
+        raise DriverError("Este dispositivo no admite cambiar de fuente")
+
     def preparar(self):
         """Comprobaciones lentas por red que se hacen al escanear (fuera del lock del servidor)."""
 
@@ -728,6 +732,26 @@ class AndroidTV(Driver):
         Android pregunte "Abrir con"; ver plan.md). Lo demas se manda tal cual."""
         m = cls._YOUTUBE.search(url)
         return "vnd.youtube://" + m.group(1) if m else url
+
+    # Entradas TIF de TVs con chip MediaTek (la Caixun). Otras marcas usan otros ids: el enlace solo
+    # se ignora. "Inicio" no es una entrada: desde una entrada la tecla Home no vuelve, asi que se abre
+    # una app y luego Home (ver plan.md).
+    fuentes = ("HDMI1", "HDMI2", "HDMI3", "Composite", "TV", "Inicio")
+    FUENTES = {
+        "TV": "HW0", "Composite": "HW1", "HDMI1": "HW4", "HDMI2": "HW5", "HDMI3": "HW6",
+    }
+    _SERVICIOS = {"HW0": ".tuner.TunerInputService", "HW1": ".composite.CompositeInputService"}
+
+    def fuente(self, nombre):
+        if nombre == "Inicio":
+            self.launch("youtube")
+            time.sleep(3)
+            return self.key("Home")
+        hw = self.FUENTES.get(nombre)
+        if not hw:
+            raise DriverError("Fuente no valida")
+        srv = self._SERVICIOS.get(hw, ".hdmi.HDMIInputService")
+        self._mandar(_pb((90, _pb((1, f"content://android.media.tv/passthrough/com.mediatek.tvinput%2F{srv}%2F{hw}")))))
 
     def abrir(self, url):
         if not re.fullmatch(r"https?://\S{1,500}", url or ""):
