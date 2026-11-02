@@ -48,26 +48,49 @@ final class Discovery {
         }
     }
 
+    /** Puertos de cada driver, en el orden en que se intenta identificar un dispositivo. */
+    private static final int[] PUERTOS = {Roku.PROBE_PORT, Hisense.PROBE_PORT, AndroidTV.PROBE_PORT};
+
+    private static Driver identificar(String ip, int puerto) {
+        if (puerto == Roku.PROBE_PORT) return Roku.probe(ip);
+        if (puerto == Hisense.PROBE_PORT) return Hisense.probe(ip);
+        return AndroidTV.probe(ip);
+    }
+
+    /**
+     * Fase 1: prueba a la vez cada (IP, puerto) de la subred. Fase 2: identifica solo lo que tiene un puerto abierto.
+     * Antes cada IP probaba sus puertos uno tras otro (hasta 1,2 s por IP).
+     */
     static List<Driver> descubrir() {
         List<Driver> res = new ArrayList<>();
         String pre = prefijoLocal();
         if (pre == null) return res;
-        ExecutorService ex = Executors.newFixedThreadPool(64);
+        ExecutorService ex = Executors.newFixedThreadPool(128);
         try {
+            List<Future<Boolean>> abiertos = new ArrayList<>();
+            for (int i = 1; i < 255; i++) {
+                for (final int puerto : PUERTOS) {
+                    final String ip = pre + i;
+                    abiertos.add(ex.submit(new Callable<Boolean>() {
+                        @Override public Boolean call() { return abierto(ip, puerto); }
+                    }));
+                }
+            }
             List<Future<Driver>> tareas = new ArrayList<>();
+            int n = 0;
             for (int i = 1; i < 255; i++) {
                 final String ip = pre + i;
+                final List<Integer> puertos = new ArrayList<>();
+                for (int puerto : PUERTOS) {
+                    try { if (abiertos.get(n++).get()) puertos.add(puerto); } catch (Exception ignorado) { /* sin respuesta */ }
+                }
+                if (puertos.isEmpty()) continue;
                 tareas.add(ex.submit(new Callable<Driver>() {
                     @Override public Driver call() {
-                        if (abierto(ip, Roku.PROBE_PORT)) {
-                            Driver d = Roku.probe(ip);
+                        for (int puerto : puertos) {
+                            Driver d = identificar(ip, puerto);
                             if (d != null) return d;
                         }
-                        if (abierto(ip, Hisense.PROBE_PORT)) {
-                            Driver d = Hisense.probe(ip);
-                            if (d != null) return d;
-                        }
-                        if (abierto(ip, AndroidTV.PROBE_PORT)) return AndroidTV.probe(ip);
                         return null;
                     }
                 }));

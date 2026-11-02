@@ -7,8 +7,10 @@ dispositivos (Roku, Hisense, ...) y sirve una web pensada para el celular. Idiom
 ## Cómo ejecutar
 - `python servidor.py [--puerto 8090]` (en Windows: `Iniciar Control TV.bat`). Detecta dispositivos por SSDP al arrancar;
   el botón "Buscar" de la web vuelve a escanear. Abrir en el celular la URL que imprime (mismo WiFi).
-- No hay tests ni dependencias. Verificar con `python -I -m py_compile servidor.py dispositivos.py` y probando con `curl`
-  contra otro puerto (`--puerto 8099`), p. ej. `curl localhost:8099/devices`.
+- Sin dependencias. Pruebas sin red ni TV (protobuf, DER, emparejamiento): `python -I -m unittest discover -s tests`.
+  Además `python -I -m py_compile servidor.py dispositivos.py` y probar con `curl` contra otro puerto (`--puerto 8099`),
+  p. ej. `curl localhost:8099/devices`. Para parar ese servidor: `pkill -f "[s]ervidor.py --puerto 8099"` (sin los corchetes se mata a sí mismo).
+- App Android: `source ~/tools/env.sh && bash android/build.sh`, luego `adb install -r android/build/ControlTV.apk`.
 - `servidor.ps1` es la versión antigua (solo Roku): obsoleta, no mantener.
 
 ## Arquitectura

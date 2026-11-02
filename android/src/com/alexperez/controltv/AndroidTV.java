@@ -63,6 +63,7 @@ final class AndroidTV extends Driver {
     private volatile boolean listo;
     private final Object envio = new Object();
     private SSLSocket pairSock;
+    private long pairDesde;                   // cuando se mostro el codigo en la TV (caduca a los 2 min)
     private volatile int volNivel = -1, volMax, volMute;  // ultima notificacion de la TV (-1 = aun no llego)
 
     AndroidTV(String ip, String modelo, String nombre) { super(ip, modelo, nombre); }
@@ -248,6 +249,7 @@ final class AndroidTV extends Driver {
                 if (estado != 200) { cerrar(s); throw new DriverError("La TV rechazo el emparejamiento (estado " + estado + ")"); }
             }
             pairSock = s;
+            pairDesde = System.currentTimeMillis();
         } catch (DriverError e) {
             throw e;
         } catch (Exception e) {
@@ -265,6 +267,11 @@ final class AndroidTV extends Driver {
         if (!codigo.matches("[0-9A-F]{6}")) throw new DriverError("El codigo son 6 caracteres (0-9, A-F)");
         SSLSocket s = pairSock;
         if (s == null) throw new DriverError("Primero inicia el emparejamiento");
+        if (System.currentTimeMillis() - pairDesde > 120000) {
+            cerrar(s);
+            pairSock = null;
+            throw new DriverError("El codigo caduco: vuelve a pulsar 'Mostrar codigo en la TV'");
+        }
         try {
             RSAPublicKey cli = (RSAPublicKey) certCliente.getPublicKey();
             Certificate[] cadena = s.getSession().getPeerCertificates();

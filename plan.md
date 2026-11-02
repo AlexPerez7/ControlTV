@@ -97,7 +97,7 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
 - [x] **A** · (hecho) Al mantener pulsada una flecha se manda una tecla cada 180 ms sin esperar la respuesta anterior: si la TV va lenta
       se acumulan peticiones y la TV sigue moviéndose después de soltar. No mandar la siguiente hasta que vuelva la anterior.
 - [ ] **B** · Android TV (Python): `_sock`/`_listo` se modifican desde dos hilos sin lock; el socket de emparejamiento queda
-      abierto para siempre si el usuario no escribe el código. Añadir un lock y cerrar el pairing a los ~2 min.
+      abierto si el usuario no escribe el código. (Hecho: el código caduca a los 2 min. Falta el lock de `_sock`/`_listo`.)
 - [ ] **B** · Los IDs de dispositivo dependen de la IP (`android-tv-192-168-31-108`): si el router cambia la IP, la web olvida
       el dispositivo elegido. Usar un dato fijo (MAC, número de serie, `udn`) o reservar IPs en el router.
 - [ ] **B** · `online()` existe en todos los drivers pero nadie lo usa: el indicador "● Conectado" solo comprueba el servidor,
@@ -105,7 +105,7 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
 - [ ] **C** · La app Android ignora `dispositivos.json` (los agregados a mano, como la onn); permitir agregarlos desde la app.
 
 ### Rendimiento
-- [x] **A** · (hecho en el servidor: ~5,6 s → ~3,2 s; falta la app) Escaneo del servidor: los `probe` se hacen uno tras otro por IP (cada uno espera hasta 1,5-2 s). Hacerlos en
+- [x] **A** · (hecho: servidor ~5,6 s → ~3,2 s; la app prueba IP×puerto a la vez y sigue encontrando Caixun y Roku, sin medir el tiempo) Escaneo del servidor: los `probe` se hacen uno tras otro por IP (cada uno espera hasta 1,5-2 s). Hacerlos en
       paralelo (ThreadPoolExecutor, como ya hace `puerto_abierto`) y lanzar SSDP y el barrido de puertos a la vez: de ~10 s a ~3 s.
 - [ ] **B** · Roku: cada tecla y cada letra del texto abren una conexión HTTP nueva. Reutilizar la conexión
       (`http.client.HTTPConnection` con keep-alive) baja la latencia y acelera mucho el envío de texto.
@@ -120,7 +120,7 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
 - [ ] **B** · La app lleva dentro la clave privada de `androidtv.p12`: cualquiera con el APK podría usar el emparejamiento.
       Alternativa: generar la clave en el **Android Keystore** de cada celular (crea su propio certificado autofirmado) y
       emparejar una vez por celular. Así el APK no lleva secretos.
-- [ ] **B** · Pruebas mínimas sin dependencias (`python -m unittest`): codificar/decodificar protobuf, el hash del pairing con un
+- [x] **B** · (hecho: `tests/test_protocolo.py`, 11 pruebas; faltan Roku/Hisense) Pruebas mínimas sin dependencias (`python -m unittest`): codificar/decodificar protobuf, el hash del pairing con un
       ejemplo conocido y el parseo de respuestas de Roku/Hisense. Hoy un error ahí solo se ve probando con la TV.
 - [ ] **C** · Borrar `servidor.ps1` (obsoleto) y que `Iniciar Control TV.bat` no dependa de la ruta fija de Python 3.12
       (usar `py -3` o `python` del PATH).

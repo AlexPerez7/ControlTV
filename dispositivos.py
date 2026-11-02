@@ -362,6 +362,7 @@ class AndroidTV(Driver):
         self._listo = threading.Event()
         self._envio = threading.Lock()
         self._pair_sock = None
+        self._pair_desde = 0.0  # cuando se mostro el codigo en la TV (caduca a los 2 min)
         self._vol = None  # (nivel, maximo, silenciado) segun la ultima notificacion de la TV
 
     @property
@@ -473,6 +474,7 @@ class AndroidTV(Driver):
             self._cerrar_pair()
             raise DriverError(f"No se pudo iniciar el emparejamiento: {e}")
         self._pair_sock = s
+        self._pair_desde = time.time()
 
     def _cerrar_pair(self):
         s, self._pair_sock = self._pair_sock, None
@@ -489,6 +491,9 @@ class AndroidTV(Driver):
         s = self._pair_sock
         if s is None:
             raise DriverError("Primero inicia el emparejamiento")
+        if time.time() - self._pair_desde > 120:
+            self._cerrar_pair()
+            raise DriverError("El codigo caduco: vuelve a pulsar 'Mostrar codigo en la TV'")
         try:
             cn, ce = _rsa_de_cert(ssl.PEM_cert_to_DER_cert(open(self.CERT).read()))
             sn, se = _rsa_de_cert(s.getpeercert(binary_form=True))
