@@ -116,11 +116,32 @@ public class MainActivity extends Activity {
         @android.webkit.JavascriptInterface
         public void volumen(boolean si) { tvConVolumen = si; }
 
+        /** Vibracion de "boton": click (pulsar), tick (repetir/soltar) o fuerte (mantener). */
+        @android.webkit.JavascriptInterface
+        public void tocar(String tipo) { vibrar(tipo); }
+
         @android.webkit.JavascriptInterface
         public String compartido() { return compartido; }
 
         @android.webkit.JavascriptInterface
         public void limpiarCompartido() { compartido = ""; }
+    }
+
+    private android.os.Vibrator vibrador;
+
+    @SuppressWarnings("deprecation")
+    private void vibrar(String tipo) {
+        try {
+            if (vibrador == null) vibrador = (android.os.Vibrator) getSystemService(VIBRATOR_SERVICE);
+            if (vibrador == null || !vibrador.hasVibrator()) return;
+            boolean fuerte = "fuerte".equals(tipo), tick = "tick".equals(tipo);
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                vibrador.vibrate(android.os.VibrationEffect.createPredefined(fuerte ? android.os.VibrationEffect.EFFECT_HEAVY_CLICK
+                        : tick ? android.os.VibrationEffect.EFFECT_TICK : android.os.VibrationEffect.EFFECT_CLICK));
+            } else {
+                vibrador.vibrate(android.os.VibrationEffect.createOneShot(fuerte ? 30 : tick ? 8 : 15, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
+            }
+        } catch (RuntimeException e) { /* sin vibrador o sin permiso: no pasa nada */ }
     }
 
     /** Los botones de volumen del celular controlan la TV elegida si esta soporta volumen; si no, quedan para el celular. */

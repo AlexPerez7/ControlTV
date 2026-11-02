@@ -18,7 +18,7 @@ Todo funciona dentro de tu red WiFi; no usa internet ni nube.
 1. En el celular abre la página de **[Releases](../../releases/latest)** y descarga `ControlTV.apk`.
 2. Ábrelo. Android pedirá permiso para "Instalar apps desconocidas" para el navegador o el gestor de archivos: acéptalo.
 3. Abre **Control TV**. Debe estar en el **mismo WiFi** que las TV. Busca los dispositivos solo; el botón "Buscar" vuelve a escanear.
-4. **Android TV:** la primera vez pide un código de 6 caracteres que aparece en la TV; escríbelo en la app.
+4. **Android TV:** la primera vez, pulsa "Mostrar código en la TV" y escribe en la app el código de 6 caracteres que aparece en la pantalla. Se hace una vez por celular.
 
 Requiere Android 8 o superior.
 
@@ -40,9 +40,8 @@ Imprime una dirección (por ejemplo `http://192.168.1.20:8090`): ábrela en el c
 - **Cambio de fuente:** los ids de entradas (HDMI 1-3, Compuesto, TV) son los de TV con chip MediaTek, como la Caixun.
   En otra marca de Android TV el panel aparece pero puede no hacer nada. "Inicio" abre YouTube un instante y pulsa Home.
 - **Hisense:** la primera vez pide permiso en pantalla; sin aceptarlo el volumen da error 401.
-- **Seguridad:** el APK de los Releases lleva incluida la identidad con la que se emparejó una Android TV. Quien tenga el APK y esté
-  en tu WiFi podría controlar una TV ya emparejada con ella. Úsalo en redes de confianza.
-  Para no depender de esa identidad, compila tu propia versión (más abajo).
+- **Seguridad:** cada celular genera su propia clave en el Android Keystore la primera vez que se abre la app (la clave privada nunca sale del
+  celular ni viaja en el APK). Por eso **cada celular debe emparejarse una vez con cada Android TV** (código de 6 caracteres que muestra la TV).
 
 ## Compilar la app Android
 
@@ -53,8 +52,7 @@ bash android/build.sh                    # genera android/build/ControlTV.apk
 adb install -r android/build/ControlTV.apk
 ```
 
-La identidad TLS de las Android TV (`androidtv.p12`) no está en el repositorio: se genera con OpenSSL y el script la copia a la app.
-El APK se firma con tu propio keystore; guárdalo, porque las actualizaciones solo se instalan encima si van firmadas con la misma clave.
+No hay claves en el repositorio ni en el APK. El APK se firma con tu propio keystore; guárdalo, porque las actualizaciones solo se instalan encima si van firmadas con la misma clave.
 
 ## Pruebas
 

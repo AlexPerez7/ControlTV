@@ -101,7 +101,7 @@ Se extrajo y analizo con REA (`rea`, JADX) lo que hay en el movil; ningun protoc
 ## Instalar la app en otros celulares (familia)
 
 - El APK se genera con `source ~/tools/env.sh && bash android/build.sh` y queda en `android/build/ControlTV.apk` (ignorado por git).
-  Subir `versionCode`/`versionName` en `android/AndroidManifest.xml` en cada versión que se reparta (hoy 3 / 1.2).
+  Subir `versionCode`/`versionName` en `android/AndroidManifest.xml` en cada versión que se reparta (hoy 4 / 1.3).
 - Se pasa por WhatsApp, Drive o USB. En el celular de destino hay que permitir "Instalar apps desconocidas" para la app desde la que se abre
   el archivo. Requiere Android 8 o superior (`minSdk` 26), WiFi de la misma red que las TV y aceptar el permiso de red local si lo pide.
 - **Respaldar `~/tools/controltv.keystore`** (copia fuera del PC): las actualizaciones solo se instalan encima si van firmadas con la misma
@@ -109,7 +109,7 @@ Se extrajo y analizo con REA (`rea`, JADX) lo que hay en el movil; ningun protoc
   solo identifica al autor.
 - **Ojo:** el APK lleva dentro la identidad TLS de las Android TV (`androidtv.p12`). Es lo que permite que la Caixun ya emparejada funcione en
   todos los celulares sin repetir el código, pero quien tenga el APK puede controlar esas TV desde su WiFi. Repartirlo solo a la familia
-  (ver "clave por celular en el Android Keystore" más abajo, que lo resolvería).
+  (RESUELTO en la 1.3: ver más abajo).
 
 ## Mejoras propuestas (análisis del código, nov 2026)
 
@@ -198,3 +198,13 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
 
 - **Primera tecla perdida (corregido)**: la TV crea un control virtual (uinput `virtual-remote`) por conexion; una tecla enviada justo al conectar se perdia (p. ej. Ajustes "no hacia nada" la primera vez). Ahora se espera 0,4 s tras conectar. Ajustes (176) funciona: el receptor `GlobalKeyReceiver` de la TV abre `com.android.tv.settings`. Diagnostico con ADB: `logcat | grep GlobalKey` y `getevent -lt` para ver que manda el control fisico.
 - **Menu y CH-**: Menu (82) abre el menu de la TV en la entrada TV; en el inicio y en YouTube no hace nada (esperado). CH- sin efecto en la Caixun, tampoco con el control fisico (no hay canales sintonizados): no se puede verificar. Numeros 0-9 verificados con getevent (KEY_0..KEY_9).
+
+- **Clave por celular en el Android Keystore (v1.3, hecho)**: el APK ya no lleva `androidtv.p12`. Cada celular genera una RSA 2048 en el Keystore
+  (`generarClave()` en `AndroidTV.java`, alias `controltv-androidtv-3`) y cada celular se empareja una vez con cada TV. Lecciones: (1) Conscrypt firma el
+  handshake con relleno NONE, hace falta `setEncryptionPaddings(NONE, PKCS1)` + purposes ENCRYPT/DECRYPT + `setRandomizedEncryptionRequired(false)`;
+  (2) forzar TLS 1.2 (en 1.3 la firma PSS del Keystore usa otro MGF1); (3) el gestor de claves usa el primer alias del Keystore, por eso se borran los
+  demas; (4) si se cambian los permisos de la clave hay que subir el sufijo del alias. Diagnostico: `adb logcat | grep -E "keymint|CryptoUpcalls"` en el
+  celular y `adb logcat | grep TcpPairingServer` en la TV ("No local certificate" = el cliente no mando certificado).
+  El servidor de Python sigue usando su propio `androidtv_cert.pem` (local, ignorado por git).
+- **Vibracion (v1.3, hecho)**: `tocar(tipo)` en `index.html` -> `App.tocar` (Vibrator nativo, EFFECT_CLICK/TICK/HEAVY_CLICK; permiso VIBRATE) y
+  `navigator.vibrate` en el navegador. Clic al pulsar, tick al repetir/soltar, fuerte al activar la pulsacion larga.

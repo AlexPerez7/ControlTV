@@ -9,14 +9,10 @@ JAR="$SDK/platforms/android-35/android.jar"
 KS="${CONTROLTV_KEYSTORE:-$HOME/tools/controltv.keystore}"   # clave de firma: fuera del repositorio
 OUT="$AQUI/build"
 
-rm -rf "$OUT" && mkdir -p "$OUT/res" "$OUT/classes" "$OUT/dex" "$AQUI/assets"
+rm -rf "$OUT" "$AQUI/assets" && mkdir -p "$OUT/res" "$OUT/classes" "$OUT/dex" "$AQUI/assets"  # assets se regenera entero: nunca queda una clave vieja dentro del APK
 
 # La web es la misma que sirve servidor.py: se copia, no se duplica.
 cp "$AQUI/../index.html" "$AQUI/assets/index.html"
-# Identidad TLS de Android TV (clave privada: vive fuera del repo; ver CLAUDE.md). Se genera con openssl pkcs12 -export.
-P12="${CONTROLTV_ANDROIDTV_P12:-$HOME/tools/androidtv.p12}"
-[ -f "$P12" ] || { echo "Falta $P12 (identidad Android TV)"; exit 1; }
-cp "$P12" "$AQUI/assets/androidtv.p12"
 python3 -I - "$AQUI" <<'PY'
 import re, sys
 aqui = sys.argv[1]

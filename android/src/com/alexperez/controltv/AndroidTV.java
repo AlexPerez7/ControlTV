@@ -32,14 +32,15 @@ import javax.net.ssl.X509TrustManager;
 /**
  * Android TV / Google TV (Caixun, ...). Protocolo "Android TV Remote v2" (equivalente a AndroidTV en dispositivos.py):
  * TLS con certificado de cliente + protobuf. Pairing en :6467 (la TV muestra un codigo de 6 hex) y control en :6466.
- * La identidad TLS sale de assets/androidtv.p12 (la misma que usa el servidor, asi lo ya emparejado sigue valiendo).
+ * La identidad TLS (clave RSA + certificado autofirmado) la genera cada celular en el Android Keystore la primera vez:
+ * la clave privada nunca sale del celular ni viaja en el APK. Cada celular debe emparejarse una vez con cada TV.
  */
 final class AndroidTV extends Driver {
     static final int PROBE_PORT = 6466;
     private static final int PUERTO_PAIR = 6467;
-    private static final String CLAVE_P12 = "controltv";
+    private static final String ALIAS_CLAVE = "controltv-androidtv-3";  // subir el sufijo si cambian los permisos de la clave: la anterior no se modifica
 
-    /** Lo asigna MainActivity: hace falta para leer el .p12 de los assets. */
+    /** Lo asigna MainActivity. */
     static Context contexto;
     private static SSLContext ssl;
     private static X509Certificate certCliente;
@@ -169,13 +170,14 @@ final class AndroidTV extends Driver {
     // ---- TLS y mensajes ------------------------------------------------------------------
     private static synchronized SSLContext ctx() throws Exception {
         if (ssl == null) {
-            KeyStore ks = KeyStore.getInstance("PKCS12");
-            try (InputStream in = contexto.getAssets().open("androidtv.p12")) {
-                ks.load(in, CLAVE_P12.toCharArray());
-            }
-            certCliente = (X509Certificate) ks.getCertificate(ks.aliases().nextElement());
+            KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
+            ks.load(null);
+            // El gestor de claves usa el primer alias que encuentra: solo debe quedar la clave vigente.
+            for (String alias : java.util.Collections.list(ks.aliases())) if (!alias.equals(ALIAS_CLAVE)) ks.deleteEntry(alias);
+            if (!ks.containsAlias(ALIAS_CLAVE)) generarClave();
+            certCliente = (X509Certificate) ks.getCertificate(ALIAS_CLAVE);
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-            kmf.init(ks, CLAVE_P12.toCharArray());
+            kmf.init(ks, null);
             // La TV usa un certificado propio: no se valida (el emparejamiento por codigo es la autenticacion).
             TrustManager[] confiar = {new X509TrustManager() {
                 @Override public void checkClientTrusted(X509Certificate[] c, String t) { /* sin accion */ }
@@ -189,12 +191,39 @@ final class AndroidTV extends Driver {
         return ssl;
     }
 
+    /** Crea la clave del celular en el Keystore (hardware si existe). El certificado autofirmado lo emite el propio Keystore. */
+    private static void generarClave() throws Exception {
+        java.security.KeyPairGenerator g = java.security.KeyPairGenerator.getInstance("RSA", "AndroidKeyStore");
+        g.initialize(new android.security.keystore.KeyGenParameterSpec.Builder(ALIAS_CLAVE,
+                android.security.keystore.KeyProperties.PURPOSE_SIGN | android.security.keystore.KeyProperties.PURPOSE_VERIFY
+                | android.security.keystore.KeyProperties.PURPOSE_ENCRYPT | android.security.keystore.KeyProperties.PURPOSE_DECRYPT)
+                .setKeySize(2048)
+                .setRandomizedEncryptionRequired(false)  // la clave solo firma; sin esto el Keystore rechaza el relleno NONE
+                .setDigests(android.security.keystore.KeyProperties.DIGEST_NONE, android.security.keystore.KeyProperties.DIGEST_SHA1,
+                        android.security.keystore.KeyProperties.DIGEST_SHA256, android.security.keystore.KeyProperties.DIGEST_SHA384,
+                        android.security.keystore.KeyProperties.DIGEST_SHA512)
+                // Conscrypt firma el TLS armando el bloque PKCS#1 a mano y usando la clave con relleno NONE:
+                // sin esto el Keystore responde INCOMPATIBLE_PADDING_MODE y falla el handshake.
+                .setEncryptionPaddings(android.security.keystore.KeyProperties.ENCRYPTION_PADDING_NONE,
+                        android.security.keystore.KeyProperties.ENCRYPTION_PADDING_RSA_PKCS1)
+                .setSignaturePaddings(android.security.keystore.KeyProperties.SIGNATURE_PADDING_RSA_PKCS1,
+                        android.security.keystore.KeyProperties.SIGNATURE_PADDING_RSA_PSS)
+                .setCertificateSubject(new javax.security.auth.x500.X500Principal("CN=Control TV"))
+                .setCertificateNotBefore(new java.util.Date(System.currentTimeMillis() - 86400000L))
+                .setCertificateNotAfter(new java.util.Date(System.currentTimeMillis() + 20L * 365 * 86400000L))
+                .build());
+        g.generateKeyPair();
+    }
+
     private SSLSocket conectar(int puerto, int ms) throws Exception {
         SSLContext c = ctx();
         Socket raw = new Socket();
         raw.connect(new InetSocketAddress(ip, puerto), ms);
         SSLSocket s = (SSLSocket) c.getSocketFactory().createSocket(raw, ip, puerto, true);
         s.setSoTimeout(ms);
+        // TLS 1.2: con TLS 1.3 la firma del certificado de cliente es RSA-PSS, y el Keystore de Android la hace
+        // con un MGF1 distinto al que pide la TV (falla el handshake con "internal error").
+        s.setEnabledProtocols(new String[] {"TLSv1.2"});
         s.startHandshake();
         return s;
     }

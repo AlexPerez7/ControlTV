@@ -297,9 +297,19 @@ async function refrescarVolumen() {
   } catch {}
 }
 
+// Respuesta háptica al tocar, para que los botones se sientan "físicos". En la app usa el vibrador nativo
+// (clic nítido); en el navegador cae a navigator.vibrate. Tipos: click (al pulsar), tick (repetir/soltar), fuerte (mantener).
+function tocar(tipo) {
+  try {
+    if (window.App && App.tocar) App.tocar(tipo);
+    else if (navigator.vibrate) navigator.vibrate(tipo === 'fuerte' ? 25 : tipo === 'tick' ? 6 : 12);
+  } catch {}
+}
+document.addEventListener('pointerdown', e => { if (e.target.closest('button, summary, .app, select')) tocar('click'); }, true);
+document.addEventListener('pointerup', e => { if (e.target.closest('[data-k]')) tocar('tick'); }, true);
+
 async function key(k) {
   if (!actual) { setEstado('Elige un dispositivo', true); return; }
-  if (navigator.vibrate) navigator.vibrate(15);
   try {
     const r = await fetch('/d/' + actual.id + '/key/' + k, { method: 'POST' });
     if (!r.ok) throw new Error(await r.text());
@@ -310,7 +320,6 @@ async function key(k) {
 
 async function fuente(n) {
   if (!actual) return;
-  if (navigator.vibrate) navigator.vibrate(15);
   try {
     const r = await fetch('/d/' + actual.id + '/fuente/' + encodeURIComponent(n), { method: 'POST' });
     if (!r.ok) throw new Error(await r.text());
@@ -350,13 +359,13 @@ document.querySelectorAll('[data-k]').forEach(b => {
       if (!diferido) pulsar();  // las flechas responden al instante y luego pasan a mantenerse
       t1 = setTimeout(() => {
         mantenido = true; holdActivo = soltar;
-        if (navigator.vibrate) navigator.vibrate(25);
+        tocar('fuerte');
         inicio = mantener(k, 'start');
       }, 450);
       return;
     }
     pulsar();
-    if (rep) t1 = setTimeout(() => { t2 = setInterval(pulsar, 180); }, 450);
+    if (rep) t1 = setTimeout(() => { t2 = setInterval(() => { tocar('tick'); pulsar(); }, 180); }, 450);
   });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, soltar));
   b.addEventListener('contextmenu', e => e.preventDefault());
