@@ -34,7 +34,7 @@
   .sel select { background:var(--btn); color:var(--txt); border:none; border-radius:12px; padding:0 12px; font-size:16px; height:44px; }
   .sel button { height:44px; padding:0 14px; font-size:14px; }
   .cap { display:none; }
-  body.c-keys .cap-keys, body.c-text .cap-text, body.c-apps .cap-apps, body.c-volume .cap-volume { display:block; }
+  body.c-keys .cap-keys, body.c-text .cap-text, body.c-apps .cap-apps, body.c-volume .cap-volume, body.c-pair .cap-pair { display:block; }
   body.c-keys .row.cap-keys, body.c-text .row.cap-text { display:grid; }
   body.c-keys .cap-keys.pad { display:block; }
   body.c-text .txt.cap-text { display:flex; }
@@ -114,13 +114,22 @@
     <button data-k="Enter">⏎ Enter</button>
   </div>
 
+  <div class="cap cap-pair">
+    <div class="lbl">Esta TV necesita emparejarse</div>
+    <div class="row c2"><button id="pairIni">1. Mostrar código en la TV</button></div>
+    <div class="txt" style="display:flex;margin-top:8px">
+      <input id="pairCod" placeholder="Código de 6 caracteres" maxlength="6" autocomplete="off" autocapitalize="characters">
+      <button id="pairOk">2. Emparejar</button>
+    </div>
+  </div>
+
   <details id="detApps" class="cap cap-apps">
     <summary>📺 Aplicaciones</summary>
     <div class="apps" id="apps"></div>
   </details>
 
   <small class="help">
-    Controla tus dispositivos por WiFi: el celular y el PC con el servidor deben estar en la misma red.
+    Controla tus dispositivos por WiFi: el celular debe estar en la misma red que ellos (con el servidor del PC, el PC también).
     Elige el dispositivo arriba; los botones cambian según lo que soporte cada marca.
     Mantén presionadas las flechas y el volumen para repetir.
   </small>
@@ -138,7 +147,7 @@ async function revisarConexion() {
   try { ok = (await fetch('/ping', { cache: 'no-store' })).ok; } catch {}
   if (ok !== enLinea) {
     enLinea = ok;
-    conn.textContent = ok ? '● Conectado' : '● Sin conexión: revisa que el celular esté en el mismo WiFi y el PC encendido';
+    conn.textContent = ok ? '● Conectado' : '● Sin conexión con el servidor (si usas el PC: mismo WiFi y PC encendido)';
     conn.className = 'conn ' + (ok ? 'ok' : 'mal');
     if (ok) cargarDispositivos();
   }
@@ -149,7 +158,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) revi
 // Dispositivos: cada uno declara sus capacidades (keys, text, apps, volume).
 const selDev = document.getElementById('dev');
 let dispositivos = [], actual = null;
-const CAPS = ['keys', 'text', 'apps', 'volume'];
+const CAPS = ['keys', 'text', 'apps', 'volume', 'pair'];
 function aplicarCaps() {
   const caps = actual ? actual.caps : [];
   CAPS.forEach(c => document.body.classList.toggle('c-' + c, caps.includes(c)));
@@ -179,7 +188,7 @@ function elegir() {
 selDev.addEventListener('change', elegir);
 document.getElementById('buscar').addEventListener('click', async () => {
   setEstado('Buscando dispositivos...');
-  try { await fetch('/scan', { method: 'POST' }); await cargarDispositivos(); setEstado('✓ ' + dispositivos.length + ' dispositivo(s)'); }
+  try { const r = await (await fetch('/scan', { method: 'POST' })).json(); await cargarDispositivos(); setEstado('✓ ' + dispositivos.length + ' dispositivo(s)' + (r.red ? ' · red ' + r.red : '')); }
   catch { setEstado('Error al buscar', true); }
 });
 
@@ -226,6 +235,18 @@ async function enviarTexto() {
 }
 document.getElementById('enviar').addEventListener('click', enviarTexto);
 inp.addEventListener('keydown', e => { if (e.key === 'Enter') enviarTexto(); });
+
+async function pairar(arg, ok) {
+  if (!actual) return;
+  const r = await fetch('/d/' + actual.id + '/pair/' + arg, { method: 'POST' });
+  if (!r.ok) { setEstado(await r.text(), true); return false; }
+  setEstado(ok); return true;
+}
+document.getElementById('pairIni').addEventListener('click', () => pairar('start', 'Mira la TV: escribe el código que muestra'));
+document.getElementById('pairOk').addEventListener('click', async () => {
+  const c = document.getElementById('pairCod').value.trim();
+  if (c && await pairar(encodeURIComponent(c), '✓ Emparejada')) { await cargarDispositivos(); }
+});
 
 let appsCargadas = false;
 document.getElementById('detApps').addEventListener('toggle', async e => {

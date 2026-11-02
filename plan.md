@@ -13,7 +13,18 @@ y la interfaz muestra solo los botones que soporta. `servidor.ps1` es la version
 |---|---|---|---|
 | Roku Express (192.168.31.110) | `Roku` (ECP :8060) | teclas, texto, apps, iconos | - |
 | Hisense TN40.V0021.K221.WAM, 40" (192.168.31.192) | `Hisense` | volumen +/- y mute, abrir YouTube/Netflix (DIAL) | teclas, encendido/apagado, fuente |
+| Caixun Android TV (192.168.31.108) | `AndroidTV` (Android TV Remote v2, :6466/:6467) | teclas, volumen, encendido, abrir apps; emparejado | texto, iconos de apps; enlaces de Prime/Disney+/Max sin probar |
 | onn E58D62UN Vestel (192.168.31.145) | `Vestel` (solo manual) | nada (ver abajo) | ver abajo |
+
+### Android TV (Caixun): lo descubierto (nov 2026)
+- Puertos 6466 (control) y 6467 (pairing), TLS con certificado de cliente + protobuf. La TV muestra un codigo hex de 6 caracteres;
+  la clave del pairing es SHA-256(modulo+exponente del cliente, modulo+exponente de la TV, codigo sin su primer byte).
+- La identidad TLS del servidor es `androidtv_cert.pem`/`androidtv_clave.pem` (generada con openssl, ignorada por git). La app Android
+  usa la misma desde `~/tools/androidtv.p12` (`openssl pkcs12 -export ... -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1`),
+  asi lo emparejado desde el PC sirve en el celular. `build.sh` la copia a assets.
+- Abrir apps con enlaces `https://` genericos hace que Android pregunte "Abrir con" (Downloader tambien lo reclama).
+  Usar esquemas propios: YouTube `vnd.youtube://` (probado), Netflix `nflx://www.netflix.com` (cambiado, sin confirmar). Falta Prime/Disney+/Max.
+- Ojo: `pkill -f "servidor.py ..."` desde Bash se mata a si mismo; usar `pkill -f "[s]ervidor.py ..."`.
 
 ### Hisense: lo descubierto (nov 2026)
 - Puertos abiertos: 9085 (UPnP/Twonky), 56789 (DIAL), 56790 (descripcion `dd.xml`), 8060 y 13000 (aceptan conexion, sin respuesta HTTP).

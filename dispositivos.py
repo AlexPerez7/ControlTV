@@ -4,8 +4,13 @@ Para agregar una marca nueva: crea una subclase de Driver, implementa `probe` (d
 automatica, opcional) y los metodos que soporte, y anadela a DRIVERS al final del archivo.
 Cada driver declara en `caps` lo que puede hacer: keys, text, apps, volume.
 """
+import hashlib
+import os
 import re
 import socket
+import ssl
+import subprocess
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -56,6 +61,9 @@ class Driver:
 
     def estado(self) -> dict:
         return {}
+
+    def pair(self, arg: str):
+        raise DriverError("Este dispositivo no necesita emparejarse")
 
 
 # --- Roku (ECP, puerto 8060) -----------------------------------------------------
@@ -229,8 +237,343 @@ class Vestel(Driver):
             raise DriverError(f"La TV no acepta comandos (HTTP {e.code}); falta 'Virtual Remote'")
 
 
+# --- Android TV (Caixun y cualquier TV/box con Android TV / Google TV) -----------
+# Protocolo "Android TV Remote v2": TLS con certificado de cliente + protobuf.
+# Pairing en :6467 (la TV muestra un codigo de 6 caracteres hex) y control en :6466.
+def _varint(n):
+    out = bytearray()
+    while True:
+        b = n & 0x7F
+        n >>= 7
+        out.append(b | (0x80 if n else 0))
+        if not n:
+            return bytes(out)
+
+
+def _pb(*campos):
+    """Codifica campos protobuf: (numero, int | bytes | str)."""
+    out = b""
+    for num, v in campos:
+        if isinstance(v, int):
+            out += _varint(num << 3) + _varint(v)
+        else:
+            v = v.encode() if isinstance(v, str) else v
+            out += _varint(num << 3 | 2) + _varint(len(v)) + v
+    return out
+
+
+def _pb_leer(data):
+    """Decodifica un mensaje protobuf a {numero: [valores]} (ints o bytes)."""
+    res, i = {}, 0
+    while i < len(data):
+        clave, i = _leer_varint(data, i)
+        num, tipo = clave >> 3, clave & 7
+        if tipo == 0:
+            v, i = _leer_varint(data, i)
+        elif tipo == 2:
+            n, i = _leer_varint(data, i)
+            v, i = data[i:i + n], i + n
+        elif tipo == 1:
+            v, i = data[i:i + 8], i + 8
+        elif tipo == 5:
+            v, i = data[i:i + 4], i + 4
+        else:
+            break
+        res.setdefault(num, []).append(v)
+    return res
+
+
+def _leer_varint(data, i):
+    n = sh = 0
+    while True:
+        b = data[i]
+        i += 1
+        n |= (b & 0x7F) << sh
+        sh += 7
+        if not b & 0x80:
+            return n, i
+
+
+def _der(data, i=0):
+    """Lee un TLV DER en data[i:]; devuelve (tag, contenido, indice_siguiente)."""
+    tag, n = data[i], data[i + 1]
+    i += 2
+    if n & 0x80:
+        k = n & 0x7F
+        n = int.from_bytes(data[i:i + k], "big")
+        i += k
+    return tag, data[i:i + n], i + n
+
+
+def _hijos(contenido):
+    res, i = [], 0
+    while i < len(contenido):
+        tag, c, i = _der(contenido, i)
+        res.append((tag, c))
+    return res
+
+
+def _rsa_de_cert(der):
+    """(modulo, exponente) como bytes big-endian, de un certificado DER RSA."""
+    _, tbs, _ = _der(_hijos_raiz(der))
+    h = _hijos(tbs)
+    if h[0][0] == 0xA0:  # version explicita
+        h = h[1:]
+    spki = _hijos(h[5][1])  # serial, sigalg, emisor, validez, sujeto, clave publica
+    bits = spki[1][1][1:]  # BIT STRING sin el byte de relleno
+    _, rsa, _ = _der(bits)
+    n, e = _hijos(rsa)
+    return n[1].lstrip(b"\0"), e[1].lstrip(b"\0")
+
+
+def _hijos_raiz(der):
+    _, c, _ = _der(der)
+    return c
+
+
+class AndroidTV(Driver):
+    marca = "Android TV"
+    PUERTO_PAIR, PUERTO_REMOTE = 6467, 6466
+    CERT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "androidtv_cert.pem")
+    CLAVE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "androidtv_clave.pem")
+    # Nombres de tecla (Roku ECP) -> KEYCODE de Android
+    TECLAS = {"Up": 19, "Down": 20, "Left": 21, "Right": 22, "Select": 23, "Back": 4, "Home": 3,
+              "Power": 26, "PowerOff": 223, "PowerOn": 224, "VolumeUp": 24, "VolumeDown": 25,
+              "VolumeMute": 164, "Play": 85, "Rev": 89, "Fwd": 90, "Info": 165, "Search": 84,
+              "Enter": 66, "Backspace": 67, "InstantReplay": 88}
+    APPS = {"YouTube": "vnd.youtube://", "Netflix": "nflx://www.netflix.com",
+            "Prime Video": "https://app.primevideo.com", "Disney+": "https://www.disneyplus.com",
+            "Max": "https://www.max.com", "Spotify": "spotify://"}
+    _lock_cert = threading.Lock()
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self._paired = None  # None = sin comprobar
+        self._sock = None
+        self._listo = threading.Event()
+        self._envio = threading.Lock()
+        self._pair_sock = None
+
+    @property
+    def caps(self):
+        if self._paired is None:
+            self._paired = self._comprobar_pareado()
+        return ("keys", "apps") if self._paired else ("pair",)
+
+    @classmethod
+    def probe(cls, ip):
+        for p in (cls.PUERTO_PAIR, cls.PUERTO_REMOTE):
+            try:
+                socket.create_connection((ip, p), timeout=1.5).close()
+            except OSError:
+                return None
+        return cls(ip, "")
+
+    # -- TLS ---------------------------------------------------------------
+    @classmethod
+    def _asegurar_cert(cls):
+        with cls._lock_cert:
+            if os.path.exists(cls.CERT) and os.path.exists(cls.CLAVE):
+                return
+            try:
+                subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "3650",
+                                "-subj", "/CN=ControlTV", "-keyout", cls.CLAVE, "-out", cls.CERT],
+                               check=True, capture_output=True, timeout=60)
+                os.chmod(cls.CLAVE, 0o600)
+            except (OSError, subprocess.SubprocessError):
+                raise DriverError("No se pudo crear el certificado: instala 'openssl'")
+
+    def _conectar(self, puerto, espera=5):
+        self._asegurar_cert()
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        ctx.load_cert_chain(self.CERT, self.CLAVE)
+        raw = socket.create_connection((self.ip, puerto), timeout=espera)
+        return ctx.wrap_socket(raw)
+
+    @staticmethod
+    def _enviar_msg(sock, datos):
+        sock.sendall(_varint(len(datos)) + datos)
+
+    @staticmethod
+    def _leer_msg(sock):
+        n = sh = 0
+        while True:
+            b = sock.recv(1)
+            if not b:
+                raise ConnectionError("conexion cerrada")
+            n |= (b[0] & 0x7F) << sh
+            sh += 7
+            if not b[0] & 0x80:
+                break
+        buf = b""
+        while len(buf) < n:
+            parte = sock.recv(n - len(buf))
+            if not parte:
+                raise ConnectionError("conexion cerrada")
+            buf += parte
+        return buf
+
+    # -- emparejamiento ------------------------------------------------------
+    def _comprobar_pareado(self):
+        """Pareado = la TV nos habla (envia su configuracion) al conectar al puerto de control."""
+        try:
+            s = self._conectar(self.PUERTO_REMOTE, 3)
+        except (OSError, DriverError):
+            return False
+        try:
+            s.settimeout(3)
+            return 1 in _pb_leer(self._leer_msg(s))
+        except (OSError, ConnectionError, IndexError):
+            return False
+        finally:
+            s.close()
+
+    def pair(self, arg):
+        if arg == "start":
+            return self._pair_inicio()
+        return self._pair_codigo(arg)
+
+    @staticmethod
+    def _pair_msg(campo, cuerpo):
+        return _pb((1, 2), (2, 200), (campo, cuerpo))
+
+    def _pair_inicio(self):
+        self._cerrar_pair()
+        try:
+            s = self._conectar(self.PUERTO_PAIR)
+            s.settimeout(8)
+            enc = _pb((1, 3), (2, 6))  # HEXADECIMAL, 6 simbolos
+            pasos = [(10, _pb((1, "atvremote"), (2, "Control TV"))),   # PairingRequest -> ack (11)
+                     (20, _pb((1, enc), (3, 1))),                       # Options (rol INPUT) -> Options
+                     (30, _pb((1, enc), (2, 1)))]                       # Configuration -> ack (31)
+            for campo, cuerpo in pasos:
+                self._enviar_msg(s, self._pair_msg(campo, cuerpo))
+                resp = _pb_leer(self._leer_msg(s))
+                if resp.get(2, [200])[0] != 200:
+                    raise DriverError(f"La TV rechazo el emparejamiento (estado {resp[2][0]})")
+        except (OSError, ConnectionError, IndexError) as e:
+            self._cerrar_pair()
+            raise DriverError(f"No se pudo iniciar el emparejamiento: {e}")
+        self._pair_sock = s
+
+    def _cerrar_pair(self):
+        s, self._pair_sock = self._pair_sock, None
+        if s:
+            try:
+                s.close()
+            except OSError:
+                pass
+
+    def _pair_codigo(self, codigo):
+        codigo = codigo.strip().upper()
+        if not re.fullmatch(r"[0-9A-F]{6}", codigo):
+            raise DriverError("El codigo son 6 caracteres (0-9, A-F)")
+        s = self._pair_sock
+        if s is None:
+            raise DriverError("Primero inicia el emparejamiento")
+        try:
+            cn, ce = _rsa_de_cert(ssl.PEM_cert_to_DER_cert(open(self.CERT).read()))
+            sn, se = _rsa_de_cert(s.getpeercert(binary_form=True))
+            raw = bytes.fromhex(codigo)
+            h = hashlib.sha256(cn + ce + sn + se + raw[1:]).digest()
+            if h[0] != raw[0]:
+                raise DriverError("Codigo incorrecto")
+            self._enviar_msg(s, self._pair_msg(40, _pb((1, h))))
+            resp = _pb_leer(self._leer_msg(s))
+            if resp.get(2, [200])[0] != 200 or 41 not in resp:
+                raise DriverError("La TV no acepto el codigo")
+        except (OSError, ConnectionError, IndexError, ValueError) as e:
+            raise DriverError(f"Fallo el emparejamiento: {e}")
+        self._cerrar_pair()
+        self._paired = None  # se vuelve a comprobar
+
+    # -- control -------------------------------------------------------------
+    def online(self):
+        try:
+            socket.create_connection((self.ip, self.PUERTO_REMOTE), timeout=1.5).close()
+            return True
+        except OSError:
+            return False
+
+    def _lector(self, s):
+        try:
+            s.settimeout(None)
+            while True:
+                m = _pb_leer(self._leer_msg(s))
+                if 1 in m:  # la TV pide nuestra configuracion
+                    dev = _pb((1, "Control TV"), (2, "Control TV"), (3, 1), (4, "1"), (5, "control.tv"), (6, "1.0.0"))
+                    self._enviar(s, _pb((1, _pb((1, 622), (2, dev)))))
+                elif 2 in m:  # set_active
+                    self._enviar(s, _pb((2, _pb((1, 622)))))
+                elif 40 in m:  # remote_start: listo para recibir teclas
+                    self._listo.set()
+                elif 8 in m:  # ping
+                    v = _pb_leer(m[8][0]).get(1, [0])[0]
+                    self._enviar(s, _pb((9, _pb((1, v)))))
+        except (OSError, ConnectionError, IndexError):
+            pass
+        finally:
+            self._listo.clear()
+            try:
+                s.close()
+            except OSError:
+                pass
+            if self._sock is s:
+                self._sock = None
+
+    def _enviar(self, s, datos):
+        with self._envio:
+            self._enviar_msg(s, datos)
+
+    def _asegurar_conexion(self):
+        if self._sock is not None and self._listo.is_set():
+            return self._sock
+        if self._paired is False:
+            raise DriverError("Falta emparejar esta TV")
+        self._listo.clear()
+        try:
+            s = self._conectar(self.PUERTO_REMOTE)
+        except OSError:
+            raise DriverError(f"{self.nombre} no responde (¿esta encendida?)")
+        self._sock = s
+        threading.Thread(target=self._lector, args=(s,), daemon=True).start()
+        if not self._listo.wait(6):
+            self._sock = None
+            s.close()
+            self._paired = None
+            raise DriverError("La TV no acepto la conexion: vuelve a emparejarla")
+        return s
+
+    def _mandar(self, datos):
+        for intento in (0, 1):
+            s = self._asegurar_conexion()
+            try:
+                self._enviar(s, datos)
+                return
+            except OSError:
+                self._sock = None
+                self._listo.clear()
+                if intento:
+                    raise DriverError(f"{self.nombre} no responde")
+
+    def key(self, k):
+        if k not in self.TECLAS:
+            raise DriverError("Tecla no disponible en esta TV")
+        self._mandar(_pb((10, _pb((1, self.TECLAS[k]), (2, 3)))))  # direction 3 = SHORT
+
+    def apps(self):
+        return [{"id": n, "name": n, "icon": False} for n in self.APPS]
+
+    def launch(self, app_id):
+        if app_id not in self.APPS:
+            raise DriverError("App no soportada")
+        self._mandar(_pb((90, _pb((1, self.APPS[app_id])))))
+
+
 # Orden de deteccion; Vestel no se autodetecta.
-DRIVERS = {"roku": Roku, "hisense": Hisense, "vestel": Vestel}
+DRIVERS = {"roku": Roku, "hisense": Hisense, "vestel": Vestel, "androidtv": AndroidTV}
 
 
 def ssdp_ips(ip_local: str, espera: float = 3.0) -> set:
@@ -257,11 +600,26 @@ def ssdp_ips(ip_local: str, espera: float = 3.0) -> set:
     return ips
 
 
+def puerto_abierto(ip_local: str, puerto: int, timeout: float = 0.5) -> set:
+    """IPs de la /24 de ip_local con `puerto` abierto (para TV que no responden a SSDP)."""
+    from concurrent.futures import ThreadPoolExecutor
+    base = ip_local.rsplit(".", 1)[0]
+
+    def prueba(ip):
+        try:
+            socket.create_connection((ip, puerto), timeout=timeout).close()
+            return ip
+        except OSError:
+            return None
+    with ThreadPoolExecutor(64) as ex:
+        return {ip for ip in ex.map(prueba, [f"{base}.{i}" for i in range(1, 255)]) if ip}
+
+
 def descubrir(ip_local: str, extra_ips=()) -> list:
     """Detecta dispositivos soportados en la red. Devuelve instancias de Driver."""
     encontrados = []
-    for ip in sorted(ssdp_ips(ip_local) | set(extra_ips), key=lambda x: tuple(map(int, x.split(".")))):
-        for clase in (Roku, Hisense):
+    for ip in sorted(ssdp_ips(ip_local) | set(extra_ips) | puerto_abierto(ip_local, AndroidTV.PUERTO_REMOTE), key=lambda x: tuple(map(int, x.split(".")))):
+        for clase in (Roku, Hisense, AndroidTV):
             d = clase.probe(ip)
             if d:
                 encontrados.append(d)

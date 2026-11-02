@@ -8,3 +8,10 @@ tv_ip.txt
 *.key
 # Dispositivos agregados a mano (IPs de tu red)
 dispositivos.json
+
+# App Android: salida de compilacion y copias generadas en build.sh
+android/build/
+android/assets/
+*.keystore
+*.jks
+*.p12
