@@ -2,6 +2,11 @@
 
 Cada versión nueva debe tener aquí su sección `## X.Y` (el workflow de Release la usa como descripción y falla si falta).
 
+## 1.7
+
+### Novedades
+- **Widget con selector de TV:** la fila de arriba muestra la TV elegida y al tocarla pasa a la siguiente (también queda elegida en la app, y si eliges otra en la app el widget se actualiza). Los botones cambian según la TV: Vol −, Silencio, Vol + y Pausa en Android TV y Hisense; Atrás, Inicio, Pausa y Repetir en el Roku. El widget ahora ocupa 2 filas de alto y se puede redimensionar; si lo tenías puesto de la versión anterior, quítalo y añádelo de nuevo si se ve apretado.
+
 ## 1.6
 
 ### Novedades
