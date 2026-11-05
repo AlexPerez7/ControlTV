@@ -128,7 +128,7 @@ class Emparejamiento(unittest.TestCase):
 
     def test_abrir_rechaza_enlaces_raros(self):
         for malo in ("", "javascript:alert(1)", "intent://x#Intent;end", "file:///etc/passwd", "https://a b"):
-            with self.assertRaisesRegex(d.DriverError, "no valido"):
+            with self.assertRaisesRegex(d.DriverError, "no válido"):
                 self.tv().abrir(malo)
 
     def tv_capturando(self):
@@ -176,7 +176,7 @@ class Emparejamiento(unittest.TestCase):
 
     def test_mantener_rechaza_accion_o_tecla_invalida(self):
         tv = self.tv_capturando()
-        with self.assertRaisesRegex(d.DriverError, "no valida"):
+        with self.assertRaisesRegex(d.DriverError, "no válida"):
             tv.key_hold("Up", "mitad")
         with self.assertRaisesRegex(d.DriverError, "no disponible"):
             tv.key_hold("Inventada", "start")

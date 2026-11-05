@@ -93,7 +93,7 @@ abstract class Driver {
 
     /** Valida identificadores que acaban dentro de una URL del dispositivo. */
     static String seguro(String s) throws DriverError {
-        if (s == null || !s.matches("[A-Za-z0-9_.-]{1,64}")) throw new DriverError("Identificador no valido");
+        if (s == null || !s.matches("[A-Za-z0-9_.-]{1,64}")) throw new DriverError("Identificador no válido");
         return s;
     }
 }

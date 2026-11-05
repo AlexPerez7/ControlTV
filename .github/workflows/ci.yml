@@ -1,0 +1,15 @@
+# Pruebas en cada push y pull request a main.
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pruebas
+        run: python3 -I -m unittest discover -s tests
+      - name: Sintaxis de Python
+        run: python3 -I -m py_compile servidor.py dispositivos.py

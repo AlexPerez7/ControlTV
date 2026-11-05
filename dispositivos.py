@@ -577,7 +577,7 @@ class AndroidTV(Driver):
         while True:
             b = sock.recv(1)
             if not b:
-                raise ConnectionError("conexion cerrada")
+                raise ConnectionError("conexión cerrada")
             n |= (b[0] & 0x7F) << sh
             sh += 7
             if not b[0] & 0x80:
@@ -586,7 +586,7 @@ class AndroidTV(Driver):
         while len(buf) < n:
             parte = sock.recv(n - len(buf))
             if not parte:
-                raise ConnectionError("conexion cerrada")
+                raise ConnectionError("conexión cerrada")
             buf += parte
         return buf
 
@@ -658,11 +658,11 @@ class AndroidTV(Driver):
             raw = bytes.fromhex(codigo)
             h = hashlib.sha256(cn + ce + sn + se + raw[1:]).digest()
             if h[0] != raw[0]:
-                raise DriverError("Codigo incorrecto")
+                raise DriverError("Código incorrecto")
             self._enviar_msg(s, self._pair_msg(40, _pb((1, h))))
             resp = _pb_leer(self._leer_msg(s))
             if resp.get(2, [200])[0] != 200 or 41 not in resp:
-                raise DriverError("La TV no acepto el codigo")
+                raise DriverError("La TV no aceptó el código")
         except (OSError, ConnectionError, IndexError, ValueError) as e:
             raise DriverError(f"Fallo el emparejamiento: {e}")
         self._cerrar_pair()
@@ -740,7 +740,7 @@ class AndroidTV(Driver):
                 self._sock = None
                 s.close()
                 self._paired = False
-                raise DriverError("La TV no acepto la conexion: vuelve a emparejarla")
+                raise DriverError("La TV no aceptó la conexión: vuelve a emparejarla")
             # La TV crea un control virtual (uinput) por cada conexion; una tecla enviada antes de que
             # exista se pierde (la primera pulsacion "no hacia nada").
             time.sleep(self.ESPERA_TECLADO)
@@ -776,7 +776,7 @@ class AndroidTV(Driver):
         if k not in self.TECLAS:
             raise DriverError("Tecla no disponible en esta TV")
         if accion not in ("start", "end"):
-            raise DriverError("Accion no valida")
+            raise DriverError("Acción no válida")
         with self._hold_lock:
             if self._hold:  # cualquier orden suelta antes la tecla que siga mantenida
                 previa, temporizador = self._hold
@@ -881,13 +881,13 @@ class AndroidTV(Driver):
             return self.key("Home")
         hw = self.FUENTES.get(nombre)
         if not hw:
-            raise DriverError("Fuente no valida")
+            raise DriverError("Fuente no válida")
         srv = self._SERVICIOS.get(hw, ".hdmi.HDMIInputService")
         self._mandar(_pb((90, _pb((1, f"content://android.media.tv/passthrough/com.mediatek.tvinput%2F{srv}%2F{hw}")))))
 
     def abrir(self, url):
         if not re.fullmatch(r"https?://\S{1,500}", url or ""):
-            raise DriverError("Enlace no valido")
+            raise DriverError("Enlace no válido")
         self._mandar(_pb((90, _pb((1, self.enlace_tv(url))))))
 
 

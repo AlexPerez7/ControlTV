@@ -90,7 +90,7 @@
 <div class="wrap">
   <div class="top">
     <button class="power solo-keys" data-k="Power" title="Encender/Apagar" aria-label="Encender o apagar"><svg class="ic" aria-hidden="true"><use href="#i-power"/></svg></button>
-    <span class="estado" id="estado">Listo</span>
+    <span class="estado" id="estado" aria-live="polite">Listo</span>
     <button class="solo-keys" style="width:56px" data-k="Home" title="Inicio" aria-label="Inicio"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></button>
   </div>
 
@@ -323,12 +323,13 @@ function tocar(tipo) {
 document.addEventListener('pointerdown', e => { if (e.target.closest('button, summary, .app, select')) tocar('click'); }, true);
 document.addEventListener('pointerup', e => { if (e.target.closest('[data-k]')) tocar('tick'); }, true);
 
+const NOMBRE_TECLA = { Up: 'Arriba', Down: 'Abajo', Left: 'Izquierda', Right: 'Derecha', Select: 'OK', Back: 'Atrás', Home: 'Inicio', VolumeUp: 'Volumen +', VolumeDown: 'Volumen −', VolumeMute: 'Silencio', Play: 'Reproducir/Pausa', Rev: 'Retroceder', Fwd: 'Avanzar', Info: 'Info', PowerOff: 'Apagar', Power: 'Encender' };
 async function key(k) {
   if (!actual) { setEstado('Elige un dispositivo', true); return; }
   try {
     const r = await fetch('/d/' + actual.id + '/key/' + k, { method: 'POST' });
     if (!r.ok) throw new Error(await r.text());
-    setEstado('✓ ' + k);
+    setEstado('✓ ' + (NOMBRE_TECLA[k] || k));
     if (k.startsWith('Volume')) setTimeout(refrescarVolumen, 250);  // la TV avisa el nuevo nivel un instante despues
   } catch (e) { setEstado(msgError(e, 'Sin conexión con ' + actual.nombre), true); }
 }

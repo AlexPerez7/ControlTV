@@ -225,9 +225,9 @@ Lo que ya estaba arriba no se repite (salvo cuando cambia la prioridad). A = muc
 - [ ] **B** · Atajos de teclado en el navegador del PC (flechas, Enter, Retroceso, espacio, +/-).
 
 ### 4. Diseño y comodidad
-- [ ] **A** · El estado muestra el nombre técnico de la tecla ("✓ Up", "✓ VolumeDown"): traducir o no mostrarlo en la navegación.
-- [ ] **A** · Mensajes de error de los drivers sin tildes ("Codigo incorrecto", "¿esta encendida?"): corregir los textos visibles.
-- [ ] **A** · `aria-live="polite"` en `#estado` para TalkBack.
+- [x] **A** · (hecho: nombres en español) El estado muestra el nombre técnico de la tecla ("✓ Up", "✓ VolumeDown"): traducir o no mostrarlo en la navegación.
+- [x] **A** · (hecho) Mensajes de error de los drivers sin tildes ("Codigo incorrecto", "¿esta encendida?"): corregir los textos visibles.
+- [x] **A** · (hecho) `aria-live="polite"` en `#estado` para TalkBack.
 - [ ] **B** · Recordar los paneles abiertos (Más botones, Fuente, Apps) en `localStorage`.
 - [ ] **B** · Redundancia de encendido (⏻ + Apagar + Encender) y "Repetir" casi sin uso: moverlos a "Más botones".
 - [ ] **B** · Volumen como balancín vertical al costado del pad.
@@ -241,7 +241,7 @@ Lo que ya estaba arriba no se repite (salvo cuando cambia la prioridad). A = muc
 - [ ] **C** · Contraseña del keystore fija (`controltv`) en `build.sh`: en CI tomarla de un secreto.
 
 ### 6. Código, pruebas y mantenimiento
-- [ ] **A** · CI en cada push/PR (pruebas Python + `py_compile` + `javac`), no solo al etiquetar.
+- [x] **A** · (hecho: `.github/workflows/ci.yml`; sin `javac`, que necesita `R.java` de aapt2) CI en cada push/PR (pruebas Python + `py_compile` + `javac`), no solo al etiquetar.
 - [ ] **B** · Pruebas de las rutas HTTP con un driver falso y del parseo de Roku/Hisense con XML de ejemplo.
 - [ ] **C** · Fijar versiones de build-tools y plataforma en CI (builds reproducibles).
 - [ ] **C** · Mover los `[x]` de `plan.md` a una sección "Historial".

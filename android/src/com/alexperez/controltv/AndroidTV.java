@@ -248,7 +248,7 @@ final class AndroidTV extends Driver {
         int sh = 0;
         while (true) {
             int b = in.read();
-            if (b < 0) throw new java.io.IOException("conexion cerrada");
+            if (b < 0) throw new java.io.IOException("conexión cerrada");
             n |= (long) (b & 0x7F) << sh;
             sh += 7;
             if ((b & 0x80) == 0) break;
@@ -257,7 +257,7 @@ final class AndroidTV extends Driver {
         int hecho = 0;
         while (hecho < buf.length) {
             int r = in.read(buf, hecho, buf.length - hecho);
-            if (r < 0) throw new java.io.IOException("conexion cerrada");
+            if (r < 0) throw new java.io.IOException("conexión cerrada");
             hecho += r;
         }
         return buf;
@@ -338,10 +338,10 @@ final class AndroidTV extends Driver {
             sha.update(sinCero(srv.getPublicExponent()));
             sha.update(raw, 1, 2);
             byte[] h = sha.digest();
-            if (h[0] != raw[0]) throw new DriverError("Codigo incorrecto");
+            if (h[0] != raw[0]) throw new DriverError("Código incorrecto");
             escribir(s, msgPair(40, f(1, h)));
             Map<Integer, List<Object>> resp = leer(leerMsg(s));
-            if (entero(resp, 2, 200) != 200 || !resp.containsKey(41)) throw new DriverError("La TV no acepto el codigo");
+            if (entero(resp, 2, 200) != 200 || !resp.containsKey(41)) throw new DriverError("La TV no aceptó el código");
         } catch (DriverError e) {
             throw e;
         } catch (Exception e) {
@@ -528,7 +528,7 @@ final class AndroidTV extends Driver {
 
     @Override void keyHold(final String k, String accion) throws Exception {
         if (!TECLAS.containsKey(k)) throw new DriverError("Tecla no disponible en esta TV");
-        if (!accion.equals("start") && !accion.equals("end")) throw new DriverError("Accion no valida");
+        if (!accion.equals("start") && !accion.equals("end")) throw new DriverError("Acción no válida");
         synchronized (holdLock) {
             if (holdTecla != null) {  // cualquier orden suelta antes la tecla que siga mantenida
                 String previa = holdTecla;
@@ -601,13 +601,13 @@ final class AndroidTV extends Driver {
             case "HDMI1": hw = "HW4"; break;
             case "HDMI2": hw = "HW5"; break;
             case "HDMI3": hw = "HW6"; break;
-            default: throw new DriverError("Fuente no valida");
+            default: throw new DriverError("Fuente no válida");
         }
         mandar(f(90, f(1, "content://android.media.tv/passthrough/com.mediatek.tvinput%2F" + srv + "%2F" + hw)));
     }
 
     @Override void abrir(String url) throws Exception {
-        if (url == null || !url.matches("https?://\\S{1,500}")) throw new DriverError("Enlace no valido");
+        if (url == null || !url.matches("https?://\\S{1,500}")) throw new DriverError("Enlace no válido");
         mandar(f(90, f(1, enlaceTv(url))));
     }
 
