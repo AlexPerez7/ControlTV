@@ -486,6 +486,8 @@ class AndroidTV(Driver):
               # Sin "Source" (178) ni "Guide" (172): en la Caixun Fuente abre la lista de canales y Guia cambia a la entrada
               # de TV en vivo y deja la TV atascada en "Sin senal" (ver plan.md)
               "Settings": 176, "Menu": 82, "ChannelUp": 166, "ChannelDown": 167,
+              "Stop": 86,  # la Caixun rechaza 231 (asistente), 219 y 111 (Exit): "unknown keycode" en TvRemote
+              "Red": 183, "Green": 184, "Yellow": 185, "Blue": 186,
               **{f"Num{n}": 7 + n for n in range(10)}}
     # id (va en la URL: solo letras, numeros, - . _) -> (nombre que se muestra, enlace que abre la app, color)
     APPS = {"youtube": ("YouTube", "vnd.youtube://", "#c4302b"),

@@ -22,7 +22,7 @@
            transition:transform .06s, background .1s; touch-action:manipulation; }
   button:active, button.on { transform:scale(.94); background:var(--btn2); }
   .row { display:grid; gap:12px; margin-bottom:12px; }
-  .c2 { grid-template-columns:1fr 1fr; } .c3 { grid-template-columns:1fr 1fr 1fr; }
+  .c2 { grid-template-columns:1fr 1fr; } .c4 { grid-template-columns:repeat(4,1fr); } .c3 { grid-template-columns:1fr 1fr 1fr; }
   .power { background:var(--red); width:56px; border-radius:50%; font-size:22px; }
   .pad { position:relative; width:260px; height:260px; margin:12px auto 18px; border-radius:50%; background:var(--btn); }
   .pad button { position:absolute; background:transparent; width:80px; height:80px; font-size:26px; border-radius:50%; }
@@ -177,6 +177,13 @@
       <button data-k="ChannelDown" data-rep>CH −</button>
     </div>
     <div class="row c3">
+      <button data-k="Stop">Detener</button><span></span><span></span>
+    </div>
+    <div class="row c4">
+      <button data-k="Red" style="background:#b3261e">Rojo</button><button data-k="Green" style="background:#1e7a34">Verde</button>
+      <button data-k="Yellow" style="background:#a67c00">Amarillo</button><button data-k="Blue" style="background:#1d4fa3">Azul</button>
+    </div>
+    <div class="row c3">
       <button data-k="Num1">1</button><button data-k="Num2">2</button><button data-k="Num3">3</button>
       <button data-k="Num4">4</button><button data-k="Num5">5</button><button data-k="Num6">6</button>
       <button data-k="Num7">7</button><button data-k="Num8">8</button><button data-k="Num9">9</button>
@@ -323,7 +330,7 @@ function tocar(tipo) {
 document.addEventListener('pointerdown', e => { if (e.target.closest('button, summary, .app, select')) tocar('click'); }, true);
 document.addEventListener('pointerup', e => { if (e.target.closest('[data-k]')) tocar('tick'); }, true);
 
-const NOMBRE_TECLA = { Up: 'Arriba', Down: 'Abajo', Left: 'Izquierda', Right: 'Derecha', Select: 'OK', Back: 'Atrás', Home: 'Inicio', VolumeUp: 'Volumen +', VolumeDown: 'Volumen −', VolumeMute: 'Silencio', Play: 'Reproducir/Pausa', Rev: 'Retroceder', Fwd: 'Avanzar', Info: 'Info', PowerOff: 'Apagar', Power: 'Encender' };
+const NOMBRE_TECLA = { Up: 'Arriba', Down: 'Abajo', Left: 'Izquierda', Right: 'Derecha', Select: 'OK', Back: 'Atrás', Home: 'Inicio', VolumeUp: 'Volumen +', VolumeDown: 'Volumen −', VolumeMute: 'Silencio', Play: 'Reproducir/Pausa', Rev: 'Retroceder', Fwd: 'Avanzar', Info: 'Info', Stop: 'Detener', Red: 'Rojo', Green: 'Verde', Yellow: 'Amarillo', Blue: 'Azul', PowerOff: 'Apagar', Power: 'Encender' };
 async function key(k) {
   if (!actual) { setEstado('Elige un dispositivo', true); return; }
   try {

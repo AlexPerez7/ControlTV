@@ -13,7 +13,7 @@ y la interfaz muestra solo los botones que soporta. `servidor.ps1` es la version
 |---|---|---|---|
 | Roku Express (192.168.31.110) | `Roku` (ECP :8060) | teclas, texto, apps, iconos | - |
 | Hisense TN40.V0021.K221.WAM, 40" (192.168.31.192) | `Hisense` | volumen +/- y mute, abrir YouTube/Netflix (DIAL) | teclas, encendido/apagado, fuente |
-| Caixun Android TV (192.168.31.108) | `AndroidTV` (Android TV Remote v2, :6466/:6467) | teclas, volumen, encendido, abrir apps; emparejado | texto, iconos de apps; enlaces de Prime/Disney+/Max sin probar |
+| Caixun Android TV (192.168.31.108) | `AndroidTV` (Android TV Remote v2, :6466/:6467) | teclas, volumen, encendido, abrir apps (YouTube, Prime, Disney+, HBO Max probados); emparejado | iconos de apps |
 | onn E58D62UN Vestel (192.168.31.145) | `Vestel` (solo manual) | nada (ver abajo) | ver abajo |
 
 ### Android TV (Caixun): lo descubierto (nov 2026)
@@ -27,6 +27,7 @@ y la interfaz muestra solo los botones que soporta. `servidor.ps1` es la version
   TCL `com.tcl.tvinput/.TvPassThroughService/HW15-18`; ver [gist](https://gist.github.com/mcfrojd/9e6875e1db5c089b1e3ddeb7dba0f304) y [hilo HA](https://community.home-assistant.io/t/android-tv-hdmi/234411/64));
   casi todos se probaron por ADB, no por este protocolo, y el id de esta TV es desconocido (necesita `adb logcat` en la TV o su ajuste de depuración). **Pendiente de probar** con cuidado.
 - `Menú` sin efecto sobre una app del inicio. `Ajustes` y los números sin probar. `https://play.max.com` es el enlace de HBO Max que citan en el [hilo de enlaces de HA](https://community.home-assistant.io/t/android-tv-remote-app-links-deep-linking-guide/567921?page=12).
+- **Teclas del control físico de la Caixun (capturadas el 5-nov-2026 con `getevent`/`logcat`):** Exit (`KEY_EXIT`, Android 267 propio de MediaTek), EPG (`KEY_HELP`, 225), asistente (`KEY_CAMERA_FOCUS`), Back, Info, rojo/verde/amarillo/azul, Stop. Por ADB (`input keyevent`) sí funcionan 231 (asistente de Google) y 111 (Exit, sale de YouTube), pero el servicio TvRemote del protocolo remoto **solo acepta una lista corta**: `Received an unknown keycode of 231/219/111` en `logcat`. Aceptados: Stop (86) y los 4 colores (183-186). **Asistente y Exit no se pueden mandar por el protocolo remoto**: haría falta el mensaje de voz del protocolo (sin investigar) o ADB.
 - Puertos 6466 (control) y 6467 (pairing), TLS con certificado de cliente + protobuf. La TV muestra un codigo hex de 6 caracteres;
   la clave del pairing es SHA-256(modulo+exponente del cliente, modulo+exponente de la TV, codigo sin su primer byte).
 - La identidad TLS del servidor es `androidtv_cert.pem`/`androidtv_clave.pem` (ignorada por git). Se crea sola con `certificado_autofirmado()`
@@ -182,9 +183,9 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
       (`!@#$%^&*()_+{}|:"<>?~`) se **omiten y se avisa**. Ideas: probar en otro campo (Netflix, WiFi) por si ahí sí funcionan; mandar los símbolos de uno en uno.
       ⌫ con el campo vacío actúa como **Atrás** (comportamiento normal de Android TV): si se sigue pulsando sale de la pantalla y puede cerrar la app.
       Con ⌫: 14 pulsaciones seguidas cada 150 ms perdieron 1; **mantener ⌫ en un campo de búsqueda lo vacía y salta a la búsqueda por voz** (no repetir).
-- [x] **B** · (hecho; el panel se vio bien en el celular, **falta probar el envío a la TV**: `vnd.youtube://<id>` con un id real) App Android: **"Compartir con Control TV"**: compartir un video de YouTube desde el celular y que se abra en la TV
+- [x] **B** · (hecho; el panel se vio bien en el celular; el envío a la TV con un enlace real de YouTube vía `/open` se probó el 5-nov-2026 y reproduce el video; falta solo probarlo compartiendo desde la app del celular) App Android: **"Compartir con Control TV"**: compartir un video de YouTube desde el celular y que se abra en la TV
       (filtro de intents `SEND` + `launch` con el enlace).
-- [x] **B** · (hecho; probado en la Caixun: **Fuente no hace nada** y **CH + no hace nada dentro de YouTube**; Ajustes, Menú, Guía y números sin probar) Más teclas en Android TV: entrada/fuente (`KEYCODE_TV_INPUT`), ajustes, canal +/-, teclado numérico.
+- [x] **B** · (hecho; probado en la Caixun: **Fuente no hace nada** y **CH + no hace nada dentro de YouTube**; Ajustes funciona desde Inicio (tarda unos segundos en abrirse; 5-nov-2026) y Menú no hace nada desde Inicio; Canal+, Num1, Info y Búsqueda no cambian la actividad en primer plano desde Inicio (visto por ADB; superposiciones sin confirmar); Guía confirma que abre la entrada de TV (`TurnkeyUiMainActivity`); la TV acepta ADB en `192.168.31.108:5555` (depuración activada) y desde ahí se vuelve con `am start -a android.intent.action.MAIN -c android.intent.category.HOME`; enlaces de Prime Video, Disney+ y HBO Max probados: abren la app) Más teclas en Android TV: entrada/fuente (`KEYCODE_TV_INPUT`), ajustes, canal +/-, teclado numérico.
 - [ ] **B** · Encender por red: **Wake-on-LAN** (la MAC se puede sacar de la tabla ARP durante el escaneo) para TV que apagan el
       WiFi en reposo.
 - [ ] **C** · App Android: widget o mosaico de ajustes rápidos con Pausa, Volumen y Silencio, sin abrir la app.
