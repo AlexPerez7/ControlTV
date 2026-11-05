@@ -37,6 +37,7 @@ dispositivos (Roku, Hisense, ...) y sirve una web pensada para el celular. Idiom
   da 401. Su mute nativo no funciona; está emulado con el volumen (0 = silenciado; se lee siempre el volumen real).
   `online()` solo comprueba el puerto 9085: sin el permiso aceptado la TV sigue figurando conectada. Teclas/encendido: sin canal conocido (ver `plan.md`).
 - Subir a `main` solo cuando el usuario lo pida.
+- Cada Release (etiqueta `vX.Y`) lleva el detalle de sus cambios: añadir antes la sección `## X.Y` en `CHANGELOG.md` (el workflow la usa como descripción y falla si falta) y subir `versionName`/`versionCode` en `android/AndroidManifest.xml`.
 
 ## Análisis de apps con REA
 - Herramientas instaladas solo para el usuario en `~/tools` (Node 24, JDK 21, `rea`, `jadx-headless-mcp`, `adb`);

@@ -21,6 +21,11 @@ jobs:
         run: |
           v=$(sed -n 's/.*android:versionName="\([^"]*\)".*/\1/p' android/AndroidManifest.xml)
           [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "Etiqueta ${GITHUB_REF_NAME} no coincide con versionName $v"; exit 1; }
+      - name: Notas de la versión (CHANGELOG.md)
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          awk -v v="$v" '/^## /{p = ($2 == v); next} p' CHANGELOG.md > "$RUNNER_TEMP/notas.md"
+          [ -s "$RUNNER_TEMP/notas.md" ] || { echo "CHANGELOG.md no tiene la sección '## $v'"; exit 1; }
       - name: Compilar y firmar
         env:
           KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
@@ -33,4 +38,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp android/build/ControlTV.apk "$RUNNER_TEMP/ControlTV.apk"
-          gh release create "${GITHUB_REF_NAME}" "$RUNNER_TEMP/ControlTV.apk" --title "Control TV ${GITHUB_REF_NAME#v}" --generate-notes
+          gh release create "${GITHUB_REF_NAME}" "$RUNNER_TEMP/ControlTV.apk" --title "Control TV ${GITHUB_REF_NAME#v}" --notes-file "$RUNNER_TEMP/notas.md"
