@@ -19,7 +19,11 @@ final class Roku extends Driver {
         try {
             String x = Net.get("http://" + ip + ":8060/query/device-info", 2000).text();
             if (!x.contains("<vendor-name>Roku</vendor-name>")) return null;
-            return new Roku(ip, tag(x, "model-name"), tag(x, "user-device-name"));
+            Roku r = new Roku(ip, tag(x, "model-name"), tag(x, "user-device-name"));
+            r.uid = tag(x, "serial-number").isEmpty() ? tag(x, "device-id") : tag(x, "serial-number");
+            r.mac = Net.normalizarMac(tag(x, "wifi-mac"));
+            if (r.mac.isEmpty()) r.mac = Net.normalizarMac(tag(x, "ethernet-mac"));
+            return r;
         } catch (Exception e) {
             return null;
         }

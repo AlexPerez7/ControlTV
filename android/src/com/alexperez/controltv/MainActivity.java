@@ -36,7 +36,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         AndroidTV.contexto = getApplicationContext();
-        api = new Api(getApplicationContext());
+        api = Api.instancia(getApplicationContext());
         leerCompartido(getIntent());
         web = new WebView(this);
         web.setBackgroundColor(0xFF14161A);
@@ -59,6 +59,8 @@ public class MainActivity extends Activity {
                 if (!HOST.equals(u.getHost())) return respuesta(403, "text/plain", "Bloqueado".getBytes());
                 String ruta = u.getPath() == null || u.getPath().isEmpty() ? "/" : u.getPath();
                 if (ruta.equals("/") || ruta.equals("/index.html")) return respuesta(200, "text/html", asset("index.html"));
+                if (ruta.equals("/estilos.css")) return respuesta(200, "text/css", asset("estilos.css"));
+                if (ruta.equals("/app.js")) return respuesta(200, "text/javascript", asset("app.js"));
                 if (ruta.equals("/icono.svg")) return respuesta(200, "image/svg+xml", asset("icono.svg"));
                 if (ruta.equals("/manifest.json")) return respuesta(404, "text/plain", new byte[0]);
                 Api.Response a = api.manejar(r.getMethod(), ruta, u.getEncodedQuery());
@@ -218,6 +220,10 @@ public class MainActivity extends Activity {
 
         @android.webkit.JavascriptInterface
         public void volumen(boolean si) { tvConVolumen = si; }
+
+        /** La TV elegida en la web: el widget manda sus teclas a esa. */
+        @android.webkit.JavascriptInterface
+        public void elegido(String id) { api.elegido(id); }
 
         /** Vibracion de "boton": click (pulsar), tick (repetir/soltar) o fuerte (mantener). */
         @android.webkit.JavascriptInterface

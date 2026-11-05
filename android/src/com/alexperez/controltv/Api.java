@@ -30,6 +30,36 @@ final class Api {
     private final android.content.SharedPreferences prefs;
     private final java.util.concurrent.atomic.AtomicBoolean enFondo = new java.util.concurrent.atomic.AtomicBoolean();
 
+    private static Api compartida;
+
+    /** Una sola Api por proceso: la web y el widget comparten los drivers (y la conexion TLS ya abierta con la TV). */
+    static synchronized Api instancia(android.content.Context ctx) {
+        if (compartida == null) compartida = new Api(ctx.getApplicationContext());
+        return compartida;
+    }
+
+    /** La web avisa cual es la TV elegida: el widget manda sus teclas a esa. */
+    void elegido(String id) { prefs.edit().putString("elegido", id == null ? "" : id).apply(); }
+
+    /** Para el widget: manda una tecla a la TV elegida en la app (o a la primera). Devuelve "" si salio bien, o el error. */
+    String teclaRapida(String tecla) {
+        restaurar();
+        Driver d;
+        synchronized (this) {
+            d = dispositivos.get(prefs.getString("elegido", ""));
+            if (d == null && !dispositivos.isEmpty()) d = dispositivos.values().iterator().next();
+        }
+        if (d == null) return "Abre Control TV para buscar tu TV";
+        try {
+            d.key(tecla);
+            return "";
+        } catch (Driver.DriverError e) {
+            return e.getMessage();
+        } catch (Exception e) {
+            return "Sin conexión con " + d.nombre;
+        }
+    }
+
     Api(android.content.Context ctx) {
         prefs = ctx.getSharedPreferences("controltv", android.content.Context.MODE_PRIVATE);
     }
@@ -72,17 +102,26 @@ final class Api {
         Map<String, Driver> conocidos;
         synchronized (this) { conocidos = new LinkedHashMap<>(dispositivos); }
         for (Map.Entry<String, Driver> e : mapa.entrySet()) {  // sobre la instancia que se va a conservar
-            Driver d = conocidos.get(e.getKey());
-            (d != null ? d : e.getValue()).preparar();
+            elegir(conocidos.get(e.getKey()), e.getValue()).preparar();
         }
         return fusionar(mapa);
     }
 
+    /** Conserva la instancia ya conocida (su estado: volumen, conexion) salvo que la IP haya cambiado. */
+    private static Driver elegir(Driver previo, Driver nuevo) {
+        if (previo == null || !previo.ip.equals(nuevo.ip)) return nuevo;
+        if (!nuevo.mac.isEmpty()) previo.mac = nuevo.mac;
+        return previo;
+    }
+
     private synchronized int fusionar(Map<String, Driver> mapa) {
-        for (Map.Entry<String, Driver> e : mapa.entrySet()) {  // conserva el estado (volumen, mute) de los ya conocidos
-            if (!dispositivos.containsKey(e.getKey())) dispositivos.put(e.getKey(), e.getValue());
+        Map<String, Driver> res = new LinkedHashMap<>();
+        for (Map.Entry<String, Driver> e : mapa.entrySet()) res.put(e.getKey(), elegir(dispositivos.get(e.getKey()), e.getValue()));
+        for (Map.Entry<String, Driver> e : dispositivos.entrySet()) {  // los que no contestaron se recuerdan (○ en la web)
+            if (!res.containsKey(e.getKey()) && !e.getValue().uid.isEmpty()) res.put(e.getKey(), e.getValue());
         }
-        dispositivos.keySet().retainAll(mapa.keySet());
+        dispositivos.clear();
+        dispositivos.putAll(res);
         escaneado = true;
         try { prefs.edit().putString("dispositivos", listar().toString()).apply(); } catch (Exception ignorado) { /* sin guardar */ }
         return dispositivos.size();

@@ -15,6 +15,17 @@
     <!-- Android 17+ protege la red local; en versiones anteriores se ignora. -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 
+    <!-- Iconos de las apps de streaming instaladas en el celular (se muestran en el panel Aplicaciones). -->
+    <queries>
+        <package android:name="com.google.android.youtube" />
+        <package android:name="com.netflix.mediaclient" />
+        <package android:name="com.amazon.avod.thirdpartyclient" />
+        <package android:name="com.disney.disneyplus" />
+        <package android:name="com.wbd.stream" />
+        <package android:name="com.hbo.hbonow" />
+        <package android:name="com.spotify.music" />
+    </queries>
+
     <application
         android:label="Control TV"
         android:icon="@mipmap/ic_launcher"
@@ -38,5 +49,12 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+        <!-- Widget: volumen, silencio y pausa sin abrir la app. -->
+        <receiver android:name=".WidgetControl" android:exported="true" android:label="Control TV">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_control_info" />
+        </receiver>
     </application>
 </manifest>

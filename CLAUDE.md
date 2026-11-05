@@ -24,12 +24,14 @@ dispositivos (Roku, Hisense, ...) y sirve una web pensada para el celular. Idiom
 - App Android (`android/`): el mismo `index.html` en un WebView y los mismos drivers en Java; `Api.java` replica las rutas de `servidor.py`.
   Guarda la última lista de dispositivos (SharedPreferences) y la sirve con la cabecera `X-Escaneando` mientras reescanea; la web luego
   espera con `POST /scan?esperar=1`. Cada celular genera su clave TLS en el Android Keystore (no hay claves en el APK).
-- `index.html`: una sola página; selector de dispositivo, secciones con clases `cap-keys|cap-text|cap-apps|cap-volume`.
+- Web en tres archivos: `index.html` (marcado), `estilos.css` y `app.js`. `servidor.py` los sirve (lista cerrada `ESTATICOS`), `MainActivity.java` los atiende desde `assets` y `android/build.sh` los copia: al añadir uno nuevo hay que tocar los tres sitios.
+  Selector de dispositivo, secciones con clases `cap-keys|cap-text|cap-apps|cap-volume`.
 - Agregar una marca: subclase de `Driver` + registrarla en `DRIVERS`. Si no se autodetecta, `dispositivos.json`
   (`[{"ip":..., "marca":"vestel", "modelo":...}]`, ignorado por git). Varias TV de la misma marca funcionan sin cambios.
 
 ## Reglas
-- No subir IPs de la red ni claves: `dispositivos.json`, `roku_ip.txt`, `tv_ip.txt`, `*.pem`, `*.key` están en `.gitignore`.
+- No subir IPs de la red ni claves: `dispositivos.json`, `conocidos.json` (dispositivos vistos, con IP y MAC), `roku_ip.txt`, `tv_ip.txt`, `*.pem`, `*.key` están en `.gitignore`.
+- El id de un dispositivo es su identificador estable (UDN/serie), no la IP. La TV apagada del todo sigue en la lista (○) gracias a `conocidos.json`; `Encender` usa Wake-on-LAN si se conoce su MAC.
 - Los comandos a las TV cambian el estado de aparatos reales (volumen, apps, encendido). Antes de probar uno nuevo,
   avisar al usuario, confirmar que la TV está encendida y restaurar el valor original (p. ej. volumen 2→3→2).
   Las lecturas (GetVolume, device-info, SSDP) son seguras.

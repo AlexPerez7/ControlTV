@@ -32,6 +32,63 @@ def _http(url, method="GET", data=None, headers=None, timeout=4):
         return r.read(), r.headers.get("Content-Type", "application/octet-stream")
 
 
+def normalizar_mac(txt) -> str:
+    """'AA-BB-CC-DD-EE-FF' / 'aabbccddeeff' -> 'aa:bb:cc:dd:ee:ff'; "" si no es una MAC valida (o es todo ceros)."""
+    h = re.sub(r"[^0-9a-f]", "", str(txt or "").lower())
+    if len(h) != 12 or set(h) == {"0"}:
+        return ""
+    return ":".join(h[i:i + 2] for i in range(0, 12, 2))
+
+
+def mac_de_ip(ip: str) -> str:
+    """MAC de `ip` segun la tabla ARP del PC (se llena sola al hablar con el dispositivo); "" si no se sabe.
+    En Android 10+ las apps no pueden leer la tabla ARP: alli devuelve "" (ver plan.md)."""
+    try:
+        with open("/proc/net/arp", encoding="utf-8") as f:
+            for linea in f.read().splitlines()[1:]:
+                c = linea.split()
+                if len(c) >= 4 and c[0] == ip:
+                    return normalizar_mac(c[3])
+    except OSError:
+        pass
+    try:  # Windows (y macOS): "arp -a <ip>"
+        import subprocess
+        salida = subprocess.run(["arp", "-a", ip], capture_output=True, text=True, timeout=3).stdout
+        m = re.search(r"(?<![0-9a-f])(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}(?![0-9a-f])", salida, re.I)
+        return normalizar_mac(m.group(0)) if m else ""
+    except Exception:
+        return ""
+
+
+def paquete_magico(mac: str) -> bytes:
+    """Paquete Wake-on-LAN: 6 bytes 0xFF y la MAC repetida 16 veces."""
+    m = normalizar_mac(mac)
+    if not m:
+        raise DriverError("MAC no valida")
+    return b"\xff" * 6 + bytes.fromhex(m.replace(":", "")) * 16
+
+
+def wake_on_lan(mac: str, ip: str = ""):
+    """Manda el paquete magico por broadcast (255.255.255.255 y el de la /24 de `ip`) a los puertos 9 y 7."""
+    datos = paquete_magico(mac)
+    destinos = ["255.255.255.255"] + ([ip.rsplit(".", 1)[0] + ".255"] if ip.count(".") == 3 else [])
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        enviado = False
+        for d in destinos:
+            for puerto in (9, 7):
+                try:
+                    s.sendto(datos, (d, puerto))
+                    enviado = True
+                except OSError:
+                    pass
+        if not enviado:
+            raise DriverError("No se pudo enviar Wake-on-LAN (sin red)")
+    finally:
+        s.close()
+
+
 class Driver:
     marca = "?"
     caps: tuple = ()
@@ -41,6 +98,8 @@ class Driver:
     def __init__(self, ip: str, modelo: str = "", nombre: str = ""):
         self.ip, self.modelo = ip, modelo
         self.nombre = nombre or f"{self.marca} {modelo}".strip()
+        self.uid = ""  # identificador estable del aparato (serie, UDN...): no cambia si el router le da otra IP
+        self.mac = ""  # para Wake-on-LAN; "" si no se conoce
 
     @classmethod
     def probe(cls, ip: str):
@@ -90,6 +149,19 @@ class Driver:
     def preparar(self):
         """Comprobaciones lentas por red que se hacen al escanear (fuera del lock del servidor)."""
 
+    def wake(self):
+        """Enciende el aparato por la red (Wake-on-LAN) cuando esta apagado del todo."""
+        if not self.mac:
+            raise DriverError("No se conoce la MAC de este dispositivo")
+        wake_on_lan(self.mac, self.ip)
+
+    def datos_guardados(self) -> dict:
+        """Datos extra que se recuerdan entre escaneos (para mostrar el aparato aunque este apagado)."""
+        return {}
+
+    def restaurar(self, datos: dict):
+        """Inversa de datos_guardados()."""
+
 
 # --- Roku (ECP, puerto 8060) -----------------------------------------------------
 class Roku(Driver):
@@ -109,7 +181,10 @@ class Roku(Driver):
             return None
         if (raiz.findtext("vendor-name") or "") != "Roku":
             return None
-        return cls(ip, raiz.findtext("model-name") or "", raiz.findtext("user-device-name") or "")
+        d = cls(ip, raiz.findtext("model-name") or "", raiz.findtext("user-device-name") or "")
+        d.uid = raiz.findtext("serial-number") or raiz.findtext("device-id") or ""
+        d.mac = normalizar_mac(raiz.findtext("wifi-mac")) or normalizar_mac(raiz.findtext("ethernet-mac"))
+        return d
 
     def _post(self, path):
         _http(f"http://{self.ip}:8060{path}", "POST", b"", timeout=3)
@@ -172,7 +247,10 @@ class Hisense(Driver):
         if "hisense" not in texto.lower():
             return None
         m = re.search(r"<modelName>([^<]*)", texto)
-        return cls(ip, m.group(1).replace("hisense_", "") if m else "")
+        d = cls(ip, m.group(1).replace("hisense_", "") if m else "")
+        u = re.search(r"<UDN>\s*(?:uuid:)?([^<\s]+)", texto)
+        d.uid = u.group(1) if u else ""
+        return d
 
     def _soap(self, accion, extra=""):
         cuerpo = (f'<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
@@ -508,6 +586,8 @@ class AndroidTV(Driver):
         self._hold_lock = threading.Lock()
         self._conn = threading.RLock()  # protege _sock/_listo (varias peticiones HTTP a la vez)
         self._pair_sock = None
+        self._pair_lock = threading.Lock()  # protege _pair_sock y su temporizador (varias peticiones HTTP a la vez)
+        self._pair_timer = None
         self._pair_desde = 0.0  # cuando se mostro el codigo en la TV (caduca a los 2 min)
         self._ime = (0, 0)  # contadores (ime, campo) de la ultima edicion de texto que informo la TV
         self._vol = None  # (nivel, maximo, silenciado) segun la ultima notificacion de la TV
@@ -533,16 +613,26 @@ class AndroidTV(Driver):
                 socket.create_connection((ip, p), timeout=1.5).close()
             except OSError:
                 return None
-        return cls(ip, "", cls._nombre_cast(ip))
+        nombre, udn = cls._info_cast(ip)
+        d = cls(ip, "", nombre)
+        d.uid = udn
+        return d
 
     @staticmethod
-    def _nombre_cast(ip):
-        """Nombre que el usuario le puso a la TV (lo publica por Chromecast en :8008); "" si no lo da."""
+    def _info_cast(ip):
+        """(nombre que el usuario le puso a la TV, id estable ssdp_udn) segun Chromecast (:8008); "" si no lo da."""
         try:
-            cuerpo, _ = _http(f"http://{ip}:8008/setup/eureka_info?params=name", timeout=2)
-            return str(json.loads(cuerpo).get("name") or "")
+            cuerpo, _ = _http(f"http://{ip}:8008/setup/eureka_info", timeout=2)
+            info = json.loads(cuerpo)
+            return str(info.get("name") or ""), str(info.get("ssdp_udn") or "")
         except Exception:
-            return ""
+            return "", ""
+
+    def datos_guardados(self):
+        return {"pareado": bool(self._paired)}
+
+    def restaurar(self, datos):
+        self._paired = bool(datos.get("pareado"))
 
     # -- TLS ---------------------------------------------------------------
     @classmethod
@@ -633,11 +723,32 @@ class AndroidTV(Driver):
         except (OSError, ConnectionError, IndexError) as e:
             self._cerrar_pair()
             raise DriverError(f"No se pudo iniciar el emparejamiento: {e}")
-        self._pair_sock = s
-        self._pair_desde = time.time()
+        with self._pair_lock:
+            self._pair_sock = s
+            self._pair_desde = time.time()
+            # Si nadie escribe el código, el socket no se queda abierto para siempre (la TV tampoco lo espera más)
+            self._pair_timer = threading.Timer(self.PAIR_CADUCA, self._caducar_pair, args=(s,))
+            self._pair_timer.daemon = True
+            self._pair_timer.start()
+
+    PAIR_CADUCA = 120.0  # s
+
+    def _caducar_pair(self, s):
+        with self._pair_lock:
+            if self._pair_sock is not s:  # ya se cerró o se empezó otro emparejamiento
+                return
+            self._pair_sock = None
+        try:
+            s.close()
+        except OSError:
+            pass
 
     def _cerrar_pair(self):
-        s, self._pair_sock = self._pair_sock, None
+        with self._pair_lock:
+            s, self._pair_sock = self._pair_sock, None
+            t, self._pair_timer = self._pair_timer, None
+        if t:
+            t.cancel()
         if s:
             try:
                 s.close()
@@ -772,7 +883,38 @@ class AndroidTV(Driver):
     def key(self, k):
         if k not in self.TECLAS:
             raise DriverError("Tecla no disponible en esta TV")
-        self._inyectar(k, self.CORTA)
+        try:
+            self._inyectar(k, self.CORTA)
+        except DriverError:
+            # Encender con la TV apagada del todo (sin red): se intenta Wake-on-LAN si se conoce su MAC
+            if k in ("Power", "PowerOn") and self.mac:
+                self.wake()
+                self._tras_wake(k)
+                return
+            raise
+
+    ESPERA_WAKE = 20.0  # s: lo que se espera a que la TV vuelva a la red tras el Wake-on-LAN
+
+    def _tras_wake(self, k):
+        """El paquete mágico solo despierta la red de la TV (unos 30 s) y la pantalla sigue apagada: en cuanto el puerto
+        de control abre, se manda también la tecla de encendido. Si no vuelve a tiempo, queda enviado el Wake-on-LAN."""
+        fin = time.time() + self.ESPERA_WAKE
+        while time.time() < fin:
+            try:
+                socket.create_connection((self.ip, self.PUERTO_REMOTE), timeout=1).close()
+                break
+            except OSError:
+                time.sleep(1)
+        else:
+            return
+        with self._conn:
+            self._fallo_hasta = 0.0  # el fallo de conexión anterior ya no vale
+        for intento in range(3):  # la TV tarda un instante en aceptar la conexión TLS
+            try:
+                self._inyectar(k, self.CORTA)
+                return
+            except DriverError:
+                time.sleep(1.5)
 
     def key_hold(self, k, accion):
         if k not in self.TECLAS:
@@ -953,4 +1095,7 @@ def descubrir(ip_local: str, extra_ips=()) -> list:
 
     orden = sorted(ips, key=lambda x: tuple(map(int, x.split("."))))
     with ThreadPoolExecutor(16) as ex:  # cada probe puede tardar hasta ~2 s: en paralelo
-        return [d for d in ex.map(identificar, orden) if d]
+        res = [d for d in ex.map(identificar, orden) if d]
+    for d in res:
+        d.mac = d.mac or mac_de_ip(d.ip)  # la tabla ARP ya tiene la IP: acabamos de hablar con ella
+    return res

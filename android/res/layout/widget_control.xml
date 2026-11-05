@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget de pantalla de inicio: volumen, silencio y pausa de la TV elegida, sin abrir la app. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:padding="6dp"
+    android:background="@drawable/widget_fondo">
+
+    <Button android:id="@+id/w_vol_menos" style="@style/WidgetBoton" android:text="Vol −" />
+    <Button android:id="@+id/w_silencio" style="@style/WidgetBoton" android:text="Silencio" />
+    <Button android:id="@+id/w_vol_mas" style="@style/WidgetBoton" android:text="Vol +" />
+    <Button android:id="@+id/w_pausa" style="@style/WidgetBoton" android:text="Pausa" />
+</LinearLayout>

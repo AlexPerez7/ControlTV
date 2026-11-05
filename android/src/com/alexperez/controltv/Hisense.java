@@ -33,7 +33,10 @@ final class Hisense extends Driver {
             String x = Net.get("http://" + ip + ":56790/dd.xml", 2000).text();
             if (!x.toLowerCase().contains("hisense")) return null;
             Matcher m = Pattern.compile("<modelName>([^<]*)").matcher(x);
-            return new Hisense(ip, m.find() ? m.group(1).replace("hisense_", "") : "", null);
+            Hisense h = new Hisense(ip, m.find() ? m.group(1).replace("hisense_", "") : "", null);
+            Matcher u = Pattern.compile("<UDN>\\s*(?:uuid:)?([^<\\s]+)").matcher(x);
+            if (u.find()) h.uid = u.group(1);
+            return h;
         } catch (Exception e) {
             return null;
         }

@@ -98,19 +98,23 @@ final class AndroidTV extends Driver {
     static AndroidTV probe(String ip) {
         try (Socket s = new Socket()) {
             s.connect(new InetSocketAddress(ip, PUERTO_PAIR), 1500);
-            return new AndroidTV(ip, "", nombreCast(ip));
+            String[] info = infoCast(ip);
+            AndroidTV t = new AndroidTV(ip, "", info[0]);
+            t.uid = info[1];
+            return t;
         } catch (Exception e) {
             return null;
         }
     }
 
-    /** Nombre que el usuario le puso a la TV (lo publica por Chromecast en :8008); null si no lo da. */
-    private static String nombreCast(String ip) {
+    /** {nombre que el usuario le puso a la TV, id estable ssdp_udn} segun Chromecast (:8008); null / "" si no lo da. */
+    private static String[] infoCast(String ip) {
         try {
-            String n = new JSONObject(Net.get("http://" + ip + ":8008/setup/eureka_info?params=name", 2000).text()).optString("name", "");
-            return n.isEmpty() ? null : n;
+            JSONObject j = new JSONObject(Net.get("http://" + ip + ":8008/setup/eureka_info", 2000).text());
+            String n = j.optString("name", "");
+            return new String[]{n.isEmpty() ? null : n, j.optString("ssdp_udn", "")};
         } catch (Exception e) {
-            return null;
+            return new String[]{null, ""};
         }
     }
 
@@ -303,11 +307,26 @@ final class AndroidTV extends Driver {
             }
             pairSock = s;
             pairDesde = System.currentTimeMillis();
+            caducarPair(s);
         } catch (DriverError e) {
             throw e;
         } catch (Exception e) {
             throw new DriverError("No se pudo iniciar el emparejamiento: " + e.getMessage());
         }
+    }
+
+    /** Si nadie escribe el codigo, el socket de emparejamiento no se queda abierto para siempre (la TV tampoco lo espera). */
+    private void caducarPair(final SSLSocket s) {
+        Thread t = new Thread(new Runnable() {
+            @Override public void run() {
+                try { Thread.sleep(120000); } catch (InterruptedException e) { return; }
+                synchronized (AndroidTV.this) {
+                    if (pairSock == s) { cerrar(s); pairSock = null; }  // si no, ya se cerro o se empezo otro emparejamiento
+                }
+            }
+        });
+        t.setDaemon(true);
+        t.start();
     }
 
     private static byte[] sinCero(BigInteger n) {
@@ -509,7 +528,37 @@ final class AndroidTV extends Driver {
 
     @Override void key(String k) throws Exception {
         if (!TECLAS.containsKey(k)) throw new DriverError("Tecla no disponible en esta TV");
-        inyectar(k, CORTA);
+        try {
+            inyectar(k, CORTA);
+        } catch (DriverError e) {
+            // Encender con la TV apagada del todo (sin red): Wake-on-LAN si se conoce su MAC
+            if ((k.equals("Power") || k.equals("PowerOn")) && !mac.isEmpty()) { wake(); trasWake(k); return; }
+            throw e;
+        }
+    }
+
+    private static final long ESPERA_WAKE_MS = 20000;
+
+    /**
+     * El paquete magico solo despierta la red de la TV (unos 30 s) y la pantalla sigue apagada: en cuanto el puerto de
+     * control abre se manda tambien la tecla de encendido. Si no vuelve a tiempo, queda enviado el Wake-on-LAN.
+     */
+    private void trasWake(String k) throws Exception {
+        long fin = System.currentTimeMillis() + ESPERA_WAKE_MS;
+        boolean abierto = false;
+        while (!abierto && System.currentTimeMillis() < fin) {
+            try (Socket s = new Socket()) {
+                s.connect(new InetSocketAddress(ip, PROBE_PORT), 1000);
+                abierto = true;
+            } catch (Exception e) {
+                Thread.sleep(1000);
+            }
+        }
+        if (!abierto) return;
+        falloHasta = 0;  // el fallo de conexion anterior ya no vale
+        for (int i = 0; i < 3; i++) {  // la TV tarda un instante en aceptar la conexion TLS
+            try { inyectar(k, CORTA); return; } catch (DriverError e) { Thread.sleep(1500); }
+        }
     }
 
     // Texto: mensaje de edicion (IME) del protocolo, el mismo que usa la app Google TV. Las teclas NO sirven: entran como
@@ -605,9 +654,53 @@ final class AndroidTV extends Driver {
     @Override JSONArray apps() throws Exception {
         JSONArray a = new JSONArray();
         for (Map.Entry<String, String[]> e : APPS.entrySet()) {
-            a.put(new JSONObject().put("id", e.getKey()).put("name", e.getValue()[0]).put("icon", false).put("color", e.getValue()[2]));
+            a.put(new JSONObject().put("id", e.getKey()).put("name", e.getValue()[0])
+                    .put("icon", paquete(e.getKey()) != null).put("color", e.getValue()[2]));
         }
         return a;
+    }
+
+    // Iconos: la TV no los entrega por este protocolo, asi que se usan los de las mismas apps instaladas en este celular
+    // (sin red). Si el celular no tiene la app, la web cae a su logo propio.
+    private static final Map<String, String[]> PAQUETES = new LinkedHashMap<>();
+    static {
+        PAQUETES.put("youtube", new String[] {"com.google.android.youtube"});
+        PAQUETES.put("netflix", new String[] {"com.netflix.mediaclient"});
+        PAQUETES.put("prime-video", new String[] {"com.amazon.avod.thirdpartyclient"});
+        PAQUETES.put("disney-plus", new String[] {"com.disney.disneyplus"});
+        PAQUETES.put("hbo-max", new String[] {"com.wbd.stream", "com.hbo.hbonow"});
+        PAQUETES.put("spotify", new String[] {"com.spotify.music"});
+    }
+    private static final Map<String, byte[]> ICONOS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Paquete instalado en este celular que corresponde a la app, o null. */
+    private static String paquete(String appId) {
+        android.content.Context c = contexto;
+        String[] candidatos = PAQUETES.get(appId);
+        if (c == null || candidatos == null) return null;
+        for (String p : candidatos) {
+            try { c.getPackageManager().getApplicationInfo(p, 0); return p; } catch (Exception e) { /* no instalada */ }
+        }
+        return null;
+    }
+
+    @Override Net.Resp icon(String appId) throws Exception {
+        byte[] png = ICONOS.get(appId);
+        if (png == null) {
+            String p = paquete(appId);
+            if (p == null) throw new DriverError("Sin icono");
+            android.graphics.drawable.Drawable d = contexto.getPackageManager().getApplicationIcon(p);
+            int t = 192;
+            android.graphics.Bitmap b = android.graphics.Bitmap.createBitmap(t, t, android.graphics.Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas lienzo = new android.graphics.Canvas(b);
+            d.setBounds(0, 0, t, t);
+            d.draw(lienzo);
+            ByteArrayOutputStream o = new ByteArrayOutputStream();
+            b.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, o);
+            png = o.toByteArray();
+            ICONOS.put(appId, png);
+        }
+        return new Net.Resp(png, "image/png");
     }
 
     private static final Pattern YOUTUBE = Pattern.compile(

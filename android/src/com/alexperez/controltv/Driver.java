@@ -18,6 +18,10 @@ abstract class Driver {
     final String ip;
     final String modelo;
     final String nombre;
+    /** Identificador estable (serie, UDN...): no cambia si el router le da otra IP. "" si no se conoce. */
+    String uid = "";
+    /** MAC para Wake-on-LAN, "" si no se conoce (Android 10+ no deja leer la tabla ARP). */
+    String mac = "";
 
     Driver(String ip, String modelo, String nombre) {
         this.ip = ip;
@@ -64,7 +68,14 @@ abstract class Driver {
         return s.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
     }
 
-    String id() { return slug(marca() + "-" + ip); }
+    /** Id en las URL: usa el identificador estable y solo cae a la IP si no tiene (igual que servidor.py). */
+    String id() { return slug(marca() + "-" + (uid.isEmpty() ? ip : uid)); }
+
+    /** Enciende el dispositivo por la red (Wake-on-LAN) cuando esta apagado del todo. */
+    void wake() throws Exception {
+        if (mac.isEmpty()) throw new DriverError("No se conoce la MAC de este dispositivo");
+        Net.wakeOnLan(mac, ip);
+    }
 
     JSONObject ficha() throws JSONException {
         JSONObject o = new JSONObject();
@@ -73,6 +84,8 @@ abstract class Driver {
         o.put("modelo", modelo);
         o.put("nombre", nombre);
         o.put("ip", ip);
+        o.put("uid", uid);
+        o.put("mac", mac);
         o.put("caps", new JSONArray(java.util.Arrays.asList(caps())));
         String[] t = teclas();
         if (t != null) o.put("teclas", new JSONArray(java.util.Arrays.asList(t)));
@@ -84,15 +97,20 @@ abstract class Driver {
     /** Recrea un driver desde su ficha guardada (sin red), o null si la marca no se conoce. */
     static Driver desdeFicha(JSONObject f) throws JSONException {
         String ip = f.getString("ip"), modelo = f.optString("modelo"), nombre = f.optString("nombre");
+        Driver d;
         switch (f.optString("marca")) {
-            case "Roku": return new Roku(ip, modelo, nombre);
-            case "Hisense": return new Hisense(ip, modelo, nombre);
+            case "Roku": d = new Roku(ip, modelo, nombre); break;
+            case "Hisense": d = new Hisense(ip, modelo, nombre); break;
             case "Android TV":
                 AndroidTV t = new AndroidTV(ip, modelo, nombre);
                 t.restaurarPareado(f.optJSONArray("caps") != null && f.getJSONArray("caps").toString().contains("\"keys\""));
-                return t;
+                d = t;
+                break;
             default: return null;
         }
+        d.uid = f.optString("uid");
+        d.mac = Net.normalizarMac(f.optString("mac"));
+        return d;
     }
 
     /** Valida identificadores que acaban dentro de una URL del dispositivo. */

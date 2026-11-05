@@ -13,7 +13,7 @@ y la interfaz muestra solo los botones que soporta. `servidor.ps1` es la version
 |---|---|---|---|
 | Roku Express (192.168.31.110) | `Roku` (ECP :8060) | teclas, texto, apps, iconos | - |
 | Hisense TN40.V0021.K221.WAM, 40" (192.168.31.192) | `Hisense` | volumen +/- y mute, abrir YouTube/Netflix (DIAL) | teclas, encendido/apagado, fuente |
-| Caixun Android TV (192.168.31.108) | `AndroidTV` (Android TV Remote v2, :6466/:6467) | teclas, volumen, encendido, abrir apps (YouTube, Prime, Disney+, HBO Max probados); emparejado | iconos de apps |
+| Caixun Android TV (192.168.31.108) | `AndroidTV` (Android TV Remote v2, :6466/:6467) | teclas, volumen, encendido, abrir apps (YouTube, Prime, Disney+, HBO Max probados); emparejado; Wake-on-LAN; iconos reales (app) | - |
 | onn E58D62UN Vestel (192.168.31.145) | `Vestel` (solo manual) | nada (ver abajo) | ver abajo |
 
 ### Android TV (Caixun): lo descubierto (nov 2026)
@@ -44,6 +44,21 @@ y la interfaz muestra solo los botones que soporta. `servidor.ps1` es la version
   Para simular un Compartir sin tocar la TV: `adb shell "am start -n com.alexperez.controltv/.MainActivity -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT 'texto https://...'"`
   (las comillas dobles por fuera son necesarias: sin ellas el texto se parte en palabras).
 - Ojo: `pkill -f "servidor.py ..."` desde Bash se mata a si mismo; usar `pkill -f "[s]ervidor.py ..."`.
+
+### Android TV (Caixun): Wake-on-LAN, iconos y otros hallazgos (5-nov-2026)
+- **Wake-on-LAN (probado):** la Caixun en reposo normal sigue en la red (puertos 6466/8008/5555 abiertos, responde al ping); tras unos minutos baja la red del todo.
+  Con la red caída, el paquete mágico (broadcast, puertos 9 y 7) la **despierta la red ~30 s pero la pantalla sigue apagada y vuelve a dormir sola**. Por eso `AndroidTV.key("Power"/"PowerOn")`,
+  si falla, manda el paquete y **espera a que abra el 6466 (hasta 20 s) y entonces manda la tecla** (`_tras_wake`/`trasWake`): así se enciende la pantalla (~9 s en total).
+  Con la TV en reposo con red, `PowerOn` (224) una vez devolvió 204 sin encenderla (justo cuando bajaba la red): idea pendiente, mandar también el paquete en cada `Encender`.
+- **MAC:** `eureka_info` da `mac_address` 00:00:00:00:00:00 en la Caixun (no sirve). El servidor la saca de la tabla ARP (`mac_de_ip`, Linux y Windows) o de `"mac"` en `dispositivos.json`.
+  **La app Android no puede leer la tabla ARP (Android 10+)**: allí la MAC queda vacía y el Wake-on-LAN no actúa; haría falta un campo manual de MAC en Ajustes (sin hacer).
+- **Dispositivos recordados:** `conocidos.json` (ignorado por git) en el servidor y las preferencias en la app guardan los dispositivos con id estable; si no contestan siguen en la lista con ○ para poder encenderlos.
+  Si una TV se retira hay que borrar su entrada (o el archivo).
+- **Iconos de apps (solo app):** el protocolo no los da; se leen del `PackageManager` del celular (`<queries>` en el manifiesto) para YouTube, Netflix, Prime Video, Disney+, HBO Max (`com.wbd.stream`) y Spotify. Sin la app instalada, la web usa su logo propio. El servidor del PC no los tiene.
+- **Salvapantallas:** con la TV en el salvapantallas (`DreamActivity`), un enlace compartido abre la app **detrás** y no se ve; `Atrás` cierra el salvapantallas y la deja a la vista (`PowerOn`/224 no lo cierra). La web lo avisa en el mensaje.
+- **YouTube** pide elegir perfil ("¿Quién está viendo?") al abrirse desde un enlace: el envío funciona hasta ahí.
+- **Teclas probadas ahora:** `Ajustes` abre `com.android.tv.settings` desde el inicio y `Atrás` vuelve; `Info` no hace nada en la pantalla de perfiles de YouTube; `Menú` desde el inicio sin efecto. Los números (`Num0-9`) solo tienen sentido con señal de TV (la Caixun no tiene antena): sin verificar.
+- Las capturas de la pantalla de la TV por ADB (`adb -s 192.168.31.108:5555 exec-out screencap -p`) traen unas líneas de texto antes del PNG: recortar desde `\x89PNG`.
 
 ### Hisense: lo descubierto (nov 2026)
 - Puertos abiertos: 9085 (UPnP/Twonky), 56789 (DIAL), 56790 (descripcion `dd.xml`), 8060 y 13000 (aceptan conexion, sin respuesta HTTP).
@@ -128,10 +143,8 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
       y al pulsarlos sale error. Ocultarlos igual que el resto.
 - [x] **A** · (hecho) Al mantener pulsada una flecha se manda una tecla cada 180 ms sin esperar la respuesta anterior: si la TV va lenta
       se acumulan peticiones y la TV sigue moviéndose después de soltar. No mandar la siguiente hasta que vuelva la anterior.
-- [ ] **B** · Android TV (Python): `_sock`/`_listo` se modifican desde dos hilos sin lock; el socket de emparejamiento queda
-      abierto si el usuario no escribe el código. (Hecho: el código caduca a los 2 min. Hecho también el lock de `_sock`/`_listo`: una conexión vieja ya no apaga la señal de una nueva.)
-- [ ] **B** · Los IDs de dispositivo dependen de la IP (`android-tv-192-168-31-108`): si el router cambia la IP, la web olvida
-      el dispositivo elegido. Usar un dato fijo (MAC, número de serie, `udn`) o reservar IPs en el router.
+- [x] **B** · (hecho: lock de `_sock`/`_listo`, lock propio para el socket de emparejamiento y un temporizador que lo cierra a los 2 min aunque nadie escriba el código; Python y Java; 3 pruebas nuevas) Android TV: `_sock`/`_listo` se modificaban desde dos hilos sin lock y el socket de emparejamiento quedaba abierto.
+- [x] **B** · (hecho el 5-nov-2026: el id usa un identificador estable: `ssdp_udn` de Chromecast en :8008 para Android TV, número de serie del Roku, UDN de `dd.xml` en la Hisense; sin él cae a la IP; Python y Java) Los IDs de dispositivo dependían de la IP. Al cambiar el esquema la web olvida una vez la TV elegida.
 - [x] **B** · (hecho: `GET /d/<id>/online`, ● / ○ en el selector cada 10 s) `online()` existe en todos los drivers pero nadie lo usa: el indicador "● Conectado" solo comprueba el servidor,
       no la TV. Usarlo para un punto verde/rojo por dispositivo en el selector.
 - [ ] **C** · La app Android ignora `dispositivos.json` (los agregados a mano, como la onn); permitir agregarlos desde la app.
@@ -187,9 +200,8 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
 - [x] **B** · (hecho; el panel se vio bien en el celular; el envío a la TV con un enlace real de YouTube vía `/open` se probó el 5-nov-2026 y reproduce el video; falta solo probarlo compartiendo desde la app del celular) App Android: **"Compartir con Control TV"**: compartir un video de YouTube desde el celular y que se abra en la TV
       (filtro de intents `SEND` + `launch` con el enlace).
 - [x] **B** · (hecho; probado en la Caixun: **Fuente no hace nada** y **CH + no hace nada dentro de YouTube**; Ajustes funciona desde Inicio (tarda unos segundos en abrirse; 5-nov-2026) y Menú no hace nada desde Inicio; Canal+, Num1, Info y Búsqueda no cambian la actividad en primer plano desde Inicio (visto por ADB; superposiciones sin confirmar); Guía confirma que abre la entrada de TV (`TurnkeyUiMainActivity`); la TV acepta ADB en `192.168.31.108:5555` (depuración activada) y desde ahí se vuelve con `am start -a android.intent.action.MAIN -c android.intent.category.HOME`; enlaces de Prime Video, Disney+ y HBO Max probados: abren la app) Más teclas en Android TV: entrada/fuente (`KEYCODE_TV_INPUT`), ajustes, canal +/-, teclado numérico.
-- [ ] **B** · Encender por red: **Wake-on-LAN** (la MAC se puede sacar de la tabla ARP durante el escaneo) para TV que apagan el
-      WiFi en reposo.
-- [ ] **C** · App Android: widget o mosaico de ajustes rápidos con Pausa, Volumen y Silencio, sin abrir la app.
+- [x] **B** · (hecho y **probado en la Caixun el 5-nov-2026**) Encender por red: **Wake-on-LAN**. Ver "Wake-on-LAN" más abajo.
+- [x] **C** · (hecho: `WidgetControl`, widget de 4 botones Vol −, Silencio, Vol +, Pausa; probado el receptor con `adb shell am broadcast` y el volumen subió y bajó un paso; falta añadirlo a la pantalla de inicio y verlo) App Android: widget con Pausa, Volumen y Silencio, sin abrir la app. Manda las teclas a la TV elegida en la web (`App.elegido`) o a la primera.
 - [ ] **C** · Atajos: secuencias guardadas (p. ej. "Noche": abrir YouTube y bajar el volumen) y acciones a todas las TV a la vez
       (silenciar todo).
 

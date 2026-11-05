@@ -104,6 +104,7 @@ final class Discovery {
         } finally {
             ex.shutdownNow();
         }
+        for (Driver d : res) if (d.mac.isEmpty()) d.mac = Net.macDe(d.ip);  // en Android 10+ queda "": ver Driver.mac
         return res;
     }
 }

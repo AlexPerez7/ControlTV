@@ -15,7 +15,7 @@ OUT="$AQUI/build"
 rm -rf "$OUT" "$AQUI/assets" && mkdir -p "$OUT/res" "$OUT/classes" "$OUT/dex" "$AQUI/assets"  # assets se regenera entero: nunca queda una clave vieja dentro del APK
 
 # La web es la misma que sirve servidor.py: se copia, no se duplica.
-cp "$AQUI/../index.html" "$AQUI/assets/index.html"
+cp "$AQUI/../index.html" "$AQUI/../estilos.css" "$AQUI/../app.js" "$AQUI/assets/"
 python3 -I - "$AQUI" <<'PY'
 import re, sys
 aqui = sys.argv[1]
@@ -27,9 +27,9 @@ PY
 
 "$BT/aapt2" compile --dir "$AQUI/res" -o "$OUT/res"
 "$BT/aapt2" link -o "$OUT/base.apk" -I "$JAR" --manifest "$AQUI/AndroidManifest.xml" \
-    -A "$AQUI/assets" --min-sdk-version 26 --target-sdk-version 35 "$OUT"/res/*.flat
+    -A "$AQUI/assets" --min-sdk-version 26 --target-sdk-version 35 --java "$OUT/gen" "$OUT"/res/*.flat
 
-javac --release 17 -Xlint:all -cp "$JAR" -d "$OUT/classes" "$AQUI"/src/com/alexperez/controltv/*.java
+javac --release 17 -Xlint:all -cp "$JAR" -d "$OUT/classes" "$AQUI"/src/com/alexperez/controltv/*.java "$OUT"/gen/com/alexperez/controltv/R.java
 (cd "$OUT/classes" && find . -name '*.class' | sed 's|^\./||') > "$OUT/clases.txt"
 "$BT/d8" --release --min-api 26 --lib "$JAR" --output "$OUT/dex" $(sed "s|^|$OUT/classes/|" "$OUT/clases.txt")
 

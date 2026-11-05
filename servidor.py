@@ -20,7 +20,9 @@ import dispositivos
 from dispositivos import DRIVERS, DriverError
 
 BASE = Path(__file__).resolve().parent
+ESTATICOS = {"/estilos.css": "text/css; charset=utf-8", "/app.js": "text/javascript; charset=utf-8"}  # la web va en tres archivos
 CFG = BASE / "dispositivos.json"
+CONOCIDOS = BASE / "conocidos.json"  # dispositivos ya vistos (con su MAC): siguen en la lista aunque estén apagados
 DEVICES: dict = {}  # id -> Driver
 LOCK = threading.Lock()
 ESCANEO = threading.Lock()  # un solo barrido a la vez: si llega otro "Buscar", espera y usa ese resultado
@@ -46,7 +48,37 @@ def ip_local() -> str:
 
 
 def id_de(d) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", f"{d.marca}-{d.ip}".lower()).strip("-")
+    """Id del dispositivo en las URL. Usa su identificador estable (serie/UDN) y solo cae a la IP si no tiene: así el
+    router puede cambiarle la IP sin que la web olvide cuál estaba elegido."""
+    return re.sub(r"[^a-z0-9]+", "-", f"{d.marca}-{d.uid or d.ip}".lower()).strip("-")
+
+
+def cargar_conocidos() -> dict:
+    """id -> Driver de los dispositivos que se vieron en escaneos anteriores."""
+    try:
+        entradas = json.loads(CONOCIDOS.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    res = {}
+    for e in entradas if isinstance(entradas, list) else []:
+        try:
+            d = DRIVERS[e["marca"]](e["ip"], e.get("modelo", ""), e.get("nombre", ""))
+            d.uid, d.mac = str(e["uid"]), dispositivos.normalizar_mac(e.get("mac"))
+            d.restaurar(e.get("extra") or {})
+            res[id_de(d)] = d
+        except (KeyError, TypeError):
+            continue
+    return res
+
+
+def guardar_conocidos(dispositivos_: dict):
+    claves = {c: k for k, c in DRIVERS.items()}
+    lista = [{"marca": claves[type(d)], "ip": d.ip, "modelo": d.modelo, "nombre": d.nombre, "uid": d.uid, "mac": d.mac,
+              "extra": d.datos_guardados()} for d in dispositivos_.values() if d.uid and type(d) in claves]
+    try:
+        CONOCIDOS.write_text(json.dumps(lista, indent=1), encoding="utf-8")
+    except OSError as e:
+        print(f"  no se pudo guardar conocidos.json: {e}")
 
 
 def manuales() -> list:
@@ -66,7 +98,9 @@ def manuales() -> list:
             continue
         clase = DRIVERS.get(str(e.get("marca", "")).lower())
         if clase and e.get("ip"):
-            res.append(clase(e["ip"], e.get("modelo", ""), e.get("nombre", "")))
+            d = clase(e["ip"], e.get("modelo", ""), e.get("nombre", ""))
+            d.mac = dispositivos.normalizar_mac(e.get("mac"))  # opcional: para Wake-on-LAN
+            res.append(d)
         else:
             print(f"  dispositivos.json: entrada ignorada {e}")
     return res
@@ -85,18 +119,30 @@ def escanear() -> int:
 
 
 def _escanear() -> int:
-    nuevos = {id_de(d): d for d in dispositivos.descubrir(IP_LOCAL)}
-    nuevos.update({id_de(d): d for d in manuales()})
+    encontrados = {id_de(d): d for d in dispositivos.descubrir(IP_LOCAL)}
+    encontrados.update({id_de(d): d for d in manuales()})
     with LOCK:
         conocidos = dict(DEVICES)
-    for k, d in nuevos.items():  # lento (red): fuera del lock, sobre la instancia que se va a conservar
-        conocidos.get(k, d).preparar()
+    for k, d in cargar_conocidos().items():
+        conocidos.setdefault(k, d)
+    destino = {}
+    for k, d in encontrados.items():
+        previo = conocidos.get(k)
+        if previo is not None and previo.ip == d.ip:  # misma instancia: conserva el estado (volumen, mute, conexión)
+            previo.nombre, previo.modelo = d.nombre or previo.nombre, d.modelo or previo.modelo
+            previo.mac = d.mac or previo.mac
+            d = previo
+        destino[k] = d
+    for d in destino.values():  # lento (red): fuera del lock, sobre la instancia que se va a conservar
+        d.preparar()
+    for k, d in conocidos.items():  # los que no contestaron se recuerdan (○ en la web) para poder encenderlos
+        if k not in destino and d.uid:
+            destino[k] = d
     with LOCK:
-        for k, d in nuevos.items():  # conserva el estado (volumen, mute) de los ya conocidos
-            DEVICES.setdefault(k, d)
-        for k in [k for k in DEVICES if k not in nuevos]:
-            del DEVICES[k]
-        return len(DEVICES)
+        DEVICES.clear()
+        DEVICES.update(destino)
+    guardar_conocidos(destino)
+    return len(destino)
 
 
 def ficha(k, d) -> dict:
@@ -134,6 +180,8 @@ class Handler(BaseHTTPRequestHandler):
         if metodo == "GET":
             if p in ("/", "/index.html"):
                 return self.responder(200, (BASE / "index.html").read_bytes(), "text/html; charset=utf-8")
+            if p in ESTATICOS:  # lista cerrada: nunca se arma una ruta de archivo con lo que manda el cliente
+                return self.responder(200, (BASE / p[1:]).read_bytes(), ESTATICOS[p])
             if p == "/ping":
                 return self.responder(200, b"ok")
             if p == "/manifest.json":

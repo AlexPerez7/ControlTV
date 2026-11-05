@@ -8,6 +8,8 @@ tv_ip.txt
 *.key
 # Dispositivos agregados a mano (IPs de tu red)
 dispositivos.json
+# Dispositivos ya vistos (IPs y MAC de tu red): los guarda el servidor
+conocidos.json
 
 # App Android: salida de compilacion y copias generadas en build.sh
 android/build/
