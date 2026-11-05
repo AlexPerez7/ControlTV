@@ -41,14 +41,57 @@ final class Api {
     /** La web avisa cual es la TV elegida: el widget manda sus teclas a esa. */
     void elegido(String id) { prefs.edit().putString("elegido", id == null ? "" : id).apply(); }
 
+    /** La TV del widget: la elegida en la app o, si no hay, la primera. */
+    private synchronized Driver elegidoOPrimero() {
+        Driver d = dispositivos.get(prefs.getString("elegido", ""));
+        if (d == null && !dispositivos.isEmpty()) d = dispositivos.values().iterator().next();
+        return d;
+    }
+
+    /** El widget cambia a la TV siguiente de la lista (en la app tambien queda elegida). */
+    String widgetSiguiente() {
+        restaurar();
+        synchronized (this) {
+            Driver actual = elegidoOPrimero();
+            boolean tomarSiguiente = false;
+            Driver sig = null;
+            for (Driver d : dispositivos.values()) {
+                if (tomarSiguiente) { sig = d; break; }
+                if (d == actual) tomarSiguiente = true;
+            }
+            if (sig == null && !dispositivos.isEmpty()) sig = dispositivos.values().iterator().next();
+            if (sig != null) elegido(sig.id());
+            return sig == null ? "" : sig.nombre;
+        }
+    }
+
+    /**
+     * Botones del widget segun la TV elegida: {nombre de la TV, etiqueta1, tecla1, ..., etiqueta4, tecla4}; etiqueta ""
+     * = botón oculto. Con volumen: Vol-/Silencio/Vol+/Pausa; sin volumen pero con Inicio (Roku): Atras/Inicio/Pausa/Repetir.
+     */
+    String[] widgetPerfil() {
+        restaurar();
+        Driver d = elegidoOPrimero();
+        if (d == null) return new String[] {"Abre Control TV", "", "", "", "", "", "", "", ""};
+        java.util.List<String> t = d.teclas() == null ? java.util.Collections.<String>emptyList() : java.util.Arrays.asList(d.teclas());
+        String[] p = {d.nombre, "", "", "", "", "", "", "", ""};
+        String[][] b;
+        if (t.contains("VolumeUp")) {
+            b = new String[][] {{"Vol −", "VolumeDown"}, {"Silencio", "VolumeMute"}, {"Vol +", "VolumeUp"},
+                    t.contains("Play") ? new String[] {"Pausa", "Play"} : new String[] {"", ""}};
+        } else if (t.contains("Home")) {
+            b = new String[][] {{"Atrás", "Back"}, {"Inicio", "Home"}, {"Pausa", "Play"}, {"Repetir", "InstantReplay"}};
+        } else {
+            b = new String[0][];
+        }
+        for (int i = 0; i < b.length; i++) { p[1 + 2 * i] = b[i][0]; p[2 + 2 * i] = b[i][1]; }
+        return p;
+    }
+
     /** Para el widget: manda una tecla a la TV elegida en la app (o a la primera). Devuelve "" si salio bien, o el error. */
     String teclaRapida(String tecla) {
         restaurar();
-        Driver d;
-        synchronized (this) {
-            d = dispositivos.get(prefs.getString("elegido", ""));
-            if (d == null && !dispositivos.isEmpty()) d = dispositivos.values().iterator().next();
-        }
+        Driver d = elegidoOPrimero();
         if (d == null) return "Abre Control TV para buscar tu TV";
         try {
             d.key(tecla);

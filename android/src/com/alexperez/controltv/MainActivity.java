@@ -230,7 +230,7 @@ public class MainActivity extends Activity {
 
         /** La TV elegida en la web: el widget manda sus teclas a esa. */
         @android.webkit.JavascriptInterface
-        public void elegido(String id) { api.elegido(id); }
+        public void elegido(String id) { api.elegido(id); WidgetControl.refrescar(MainActivity.this); }
 
         /** Vibracion de "boton": click (pulsar), tick (repetir/soltar) o fuerte (mantener). */
         @android.webkit.JavascriptInterface

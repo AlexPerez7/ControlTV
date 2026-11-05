@@ -1,14 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Widget de pantalla de inicio: volumen, silencio y pausa de la TV elegida, sin abrir la app. -->
+<!-- Widget de pantalla de inicio: arriba la TV elegida (tocarla cambia a la siguiente), abajo 4 botones que dependen de la TV. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="horizontal"
+    android:orientation="vertical"
     android:padding="6dp"
     android:background="@drawable/widget_fondo">
 
-    <Button android:id="@+id/w_vol_menos" style="@style/WidgetBoton" android:text="Vol −" />
-    <Button android:id="@+id/w_silencio" style="@style/WidgetBoton" android:text="Silencio" />
-    <Button android:id="@+id/w_vol_mas" style="@style/WidgetBoton" android:text="Vol +" />
-    <Button android:id="@+id/w_pausa" style="@style/WidgetBoton" android:text="Pausa" />
+    <Button android:id="@+id/w_tv" style="@style/WidgetTv" android:text="▸ Control TV" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal">
+        <Button android:id="@+id/w_b1" style="@style/WidgetBoton" android:text="Vol −" />
+        <Button android:id="@+id/w_b2" style="@style/WidgetBoton" android:text="Silencio" />
+        <Button android:id="@+id/w_b3" style="@style/WidgetBoton" android:text="Vol +" />
+        <Button android:id="@+id/w_b4" style="@style/WidgetBoton" android:text="Pausa" />
+    </LinearLayout>
 </LinearLayout>
