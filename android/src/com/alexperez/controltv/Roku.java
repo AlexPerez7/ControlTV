@@ -49,6 +49,50 @@ final class Roku extends Driver {
 
     @Override void key(String k) throws Exception { post("/keypress/" + Net.pct(seguro(k))); }
 
+    // Mantener pulsada: el Roku repite la tecla mientras dura el keydown. Solo flechas y reproduccion (OK no: un toque corto
+    // de OK no debe esperar a soltarse).
+    private static final String[] LARGAS = {"Up", "Down", "Left", "Right", "Rev", "Fwd"};
+    private static final long HOLD_MAX_MS = 5000;  // si no llega el "end" (se cae el celular), se suelta sola
+    private final Object holdLock = new Object();
+    private String holdTecla;
+    private java.util.Timer holdTimer;
+
+    @Override boolean largo() { return true; }
+    @Override String[] teclasLargas() { return LARGAS; }
+
+    @Override void keyHold(final String k, String accion) throws Exception {
+        if (!java.util.Arrays.asList(LARGAS).contains(k)) throw new DriverError("Esa tecla no se puede mantener");
+        if (!accion.equals("start") && !accion.equals("end")) throw new DriverError("Acción no válida");
+        synchronized (holdLock) {
+            if (holdTecla != null) {  // cualquier orden suelta antes la tecla que siga mantenida
+                String previa = holdTecla;
+                holdTimer.cancel();
+                holdTecla = null;
+                holdTimer = null;
+                post("/keyup/" + previa);
+            }
+            if (accion.equals("start")) {
+                post("/keydown/" + k);
+                java.util.Timer t = new java.util.Timer(true);
+                t.schedule(new java.util.TimerTask() {
+                    @Override public void run() { soltarPorTiempo(k); }
+                }, HOLD_MAX_MS);
+                holdTecla = k;
+                holdTimer = t;
+            }
+        }
+    }
+
+    private void soltarPorTiempo(String k) {
+        synchronized (holdLock) {
+            if (k.equals(holdTecla)) {
+                holdTecla = null;
+                holdTimer = null;
+                try { post("/keyup/" + k); } catch (Exception ignorado) { /* sin respuesta */ }
+            }
+        }
+    }
+
     @Override void text(String t) throws Exception {
         for (int i = 0; i < t.length(); ) {
             int cp = t.codePointAt(i);

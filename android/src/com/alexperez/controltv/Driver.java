@@ -47,6 +47,8 @@ abstract class Driver {
 
     /** True si admite mantener una tecla (keyHold). */
     boolean largo() { return false; }
+    /** Teclas que se pueden mantener, o null si son las flechas y OK (Android TV). Solo se usa si largo(). */
+    String[] teclasLargas() { return null; }
     String[] fuentes() { return null; }
     void fuente(String nombre) throws Exception { throw new DriverError("Este dispositivo no admite cambiar de fuente"); }
 
@@ -89,7 +91,7 @@ abstract class Driver {
         o.put("caps", new JSONArray(java.util.Arrays.asList(caps())));
         String[] t = teclas();
         if (t != null) o.put("teclas", new JSONArray(java.util.Arrays.asList(t)));
-        if (largo()) o.put("largo", true);
+        if (largo()) o.put("largo", teclasLargas() == null ? (Object) Boolean.TRUE : new JSONArray(java.util.Arrays.asList(teclasLargas())));
         if (fuentes() != null) o.put("fuentes", new JSONArray(java.util.Arrays.asList(fuentes())));
         return o;
     }

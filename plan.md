@@ -11,7 +11,7 @@ y la interfaz muestra solo los botones que soporta. `servidor.ps1` es la version
 
 | Dispositivo | Driver | Funciona | Pendiente |
 |---|---|---|---|
-| Roku Express (192.168.31.110) | `Roku` (ECP :8060) | teclas, texto, apps, iconos; mando propio en la app; estado (inicio/salvapantallas/app y reproductor) | pulsación larga (keydown/keyup), búsqueda de contenido |
+| Roku Express (192.168.31.110) | `Roku` (ECP :8060) | teclas, texto, apps, iconos; mando propio en la app; estado (inicio/salvapantallas/app y reproductor) | búsqueda de contenido |
 | Hisense TN40.V0021.K221.WAM, 40" (192.168.31.192) | `Hisense` | volumen +/- y mute, abrir YouTube/Netflix (DIAL) | teclas, encendido/apagado, fuente |
 | Caixun Android TV (192.168.31.108) | `AndroidTV` (Android TV Remote v2, :6466/:6467) | teclas, volumen, encendido, abrir apps (YouTube, Prime, Disney+, HBO Max probados); emparejado; Wake-on-LAN; iconos reales (app) | - |
 | onn E58D62UN Vestel (192.168.31.145) | `Vestel` (solo manual) | nada (ver abajo) | ver abajo |
@@ -65,6 +65,7 @@ y la interfaz muestra solo los botones que soporta. `servidor.ps1` es la version
 - `GET /query/active-app` da la app (`type="home"` = inicio) y, si está activo, `<screensaver>`; `GET /query/media-player` da `<player state="play|pause|buffer|startup|stop|close">`. El driver los junta en `estado()` → `{actividad: inicio|salvapantallas|app, app, reproductor}` (con el salvapantallas activo, `app` sigue siendo el inicio: manda el salvapantallas).
 - **Mando propio en la app/web:** la web pone la clase `m-<marca>` en `<body>`; `.solo-roku` / `.no-roku` (estilos.css) cambian la disposición. Roku: Atrás arriba a la izquierda (donde Android TV pone el encendido) e Inicio a la derecha, línea "Ahora" (inicio / salvapantallas / "YouTube · en pausa", sondeo cada 5 s), anillo morado, Repetir·Opciones·Buscar bajo el anillo, reproducción, texto y el panel de apps abierto desde el principio. Sin encendido, apagado, volumen ni la nota del ⌫ (esa es de Android TV). El driver declara `teclas` para que la web oculte lo que el Roku no entiende.
 - Pruebas: 8 nuevas del Roku (`RokuPruebas`: `probe`, apps, teclas/texto, estado) sin red.
+- **Pulsación larga real (hecho):** `POST /d/<id>/key/<k>?accion=start|end` → ECP `/keydown/<k>` y `/keyup/<k>` (Python y Java). Solo flechas, Rev y Fwd (OK no: un toque corto no debe esperar). La ficha emite `largo` como lista de teclas (Android TV: `true` = flechas y OK) y `app.js` lo entiende. Si no llega el `end`, se suelta sola a los 5 s; pedir otra tecla suelta antes la anterior. 5 pruebas nuevas (68 en total).
 
 ### Hisense: lo descubierto (nov 2026)
 - Puertos abiertos: 9085 (UPnP/Twonky), 56789 (DIAL), 56790 (descripcion `dd.xml`), 8060 y 13000 (aceptan conexion, sin respuesta HTTP).

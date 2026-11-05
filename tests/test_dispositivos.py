@@ -5,6 +5,7 @@ Ejecutar:  python -I -m unittest discover -s tests -v
 import os
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -162,6 +163,45 @@ class RokuPruebas(unittest.TestCase):
         self.assertNotIn("Power", d.Roku.teclas)
         self.assertNotIn("VolumeUp", d.Roku.teclas)
         self.assertNotIn("volume", d.Roku.caps)
+
+    def test_mantener_pulsada_manda_keydown_y_keyup(self):
+        r = d.Roku("192.168.31.110")
+        with mock.patch.object(d, "_http") as h:
+            r.key_hold("Right", "start")
+            r.key_hold("Right", "end")
+        urls = [c.args[0] for c in h.call_args_list]
+        self.assertEqual(urls, ["http://192.168.31.110:8060/keydown/Right", "http://192.168.31.110:8060/keyup/Right"])
+        self.assertIsNone(r._hold)
+
+    def test_mantener_otra_tecla_suelta_la_anterior(self):
+        r = d.Roku("192.168.31.110")
+        with mock.patch.object(d, "_http") as h:
+            r.key_hold("Fwd", "start")
+            r.key_hold("Left", "start")
+            r._hold[1].cancel()
+        urls = [c.args[0].rsplit("/", 2)[-2:] for c in h.call_args_list]
+        self.assertEqual(urls, [["keydown", "Fwd"], ["keyup", "Fwd"], ["keydown", "Left"]])
+
+    def test_se_suelta_sola_si_no_llega_el_end(self):
+        r = d.Roku("192.168.31.110")
+        r.HOLD_MAX = 0.05
+        with mock.patch.object(d, "_http") as h:
+            r.key_hold("Up", "start")
+            time.sleep(0.3)
+        self.assertEqual([c.args[0].rsplit("/", 2)[-2] for c in h.call_args_list], ["keydown", "keyup"])
+        self.assertIsNone(r._hold)
+
+    def test_no_se_puede_mantener_ok_ni_acciones_raras(self):
+        r = d.Roku("192.168.31.110")
+        with self.assertRaises(d.DriverError):
+            r.key_hold("Select", "start")
+        with self.assertRaises(d.DriverError):
+            r.key_hold("Up", "otra")
+
+    def test_la_ficha_lista_las_teclas_que_se_mantienen(self):
+        self.assertEqual(servidor.ficha("roku-x", d.Roku("192.168.31.110"))["largo"],
+                         ["Up", "Down", "Left", "Right", "Rev", "Fwd"])
+        self.assertIs(servidor.ficha("tv", d.AndroidTV("192.168.31.108"))["largo"], True)
 
     APP = '<active-app><app id="562859" type="home">Roku Dynamic Menu</app>{}</active-app>'
     SS = '<screensaver id="55545" type="ssvr">Roku City</screensaver>'

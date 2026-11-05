@@ -149,8 +149,8 @@ def ficha(k, d) -> dict:
     f = {"id": k, "marca": d.marca, "modelo": d.modelo, "nombre": d.nombre, "ip": d.ip, "caps": list(d.caps)}
     if d.teclas is not None:
         f["teclas"] = list(d.teclas)
-    if d.largo:
-        f["largo"] = True
+    if d.largo:  # True = flechas y OK (Android TV); o la lista de teclas que se pueden mantener (Roku)
+        f["largo"] = True if d.largo is True else list(d.largo)
     if getattr(d, "fuentes", None):
         f["fuentes"] = list(d.fuentes)
     return f

@@ -93,7 +93,7 @@ class Driver:
     marca = "?"
     caps: tuple = ()
     teclas = None  # None = todas; o la tupla de teclas que admite (la web oculta el resto)
-    largo = False  # True si admite mantener una tecla (key_hold)
+    largo = False  # True si admite mantener una tecla (key_hold: flechas y OK), o la tupla de teclas que se pueden mantener
 
     def __init__(self, ip: str, modelo: str = "", nombre: str = ""):
         self.ip, self.modelo = ip, modelo
@@ -171,9 +171,16 @@ class Roku(Driver):
     teclas = ("Home", "Back", "Up", "Down", "Left", "Right", "Select", "Rev", "Fwd", "Play", "InstantReplay", "Info",
               "Search", "Enter", "Backspace")
 
+    # Mantener pulsada: el Roku repite la tecla mientras dura el keydown. Solo flechas y reproducción (OK no: un toque corto
+    # de OK no debe esperar a soltarse).
+    largo = ("Up", "Down", "Left", "Right", "Rev", "Fwd")
+    HOLD_MAX = 5.0  # s: si no llega el "end" (se cae el celular), se suelta sola para que no siga repitiendo
+
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
         self._iconos = {}  # app_id -> (cuerpo, content-type)
+        self._hold = None  # (tecla, temporizador) mientras hay una tecla mantenida
+        self._hold_lock = threading.Lock()
 
     @classmethod
     def probe(cls, ip):
@@ -201,6 +208,33 @@ class Roku(Driver):
 
     def key(self, k):
         self._post("/keypress/" + urllib.parse.quote(k, safe="_"))
+
+    def key_hold(self, k, accion):
+        if k not in self.largo:
+            raise DriverError("Esa tecla no se puede mantener")
+        if accion not in ("start", "end"):
+            raise DriverError("Acción no válida")
+        with self._hold_lock:
+            if self._hold:  # cualquier orden suelta antes la tecla que siga mantenida
+                previa, temporizador = self._hold
+                temporizador.cancel()
+                self._hold = None
+                self._post("/keyup/" + previa)
+            if accion == "start":
+                self._post("/keydown/" + k)
+                t = threading.Timer(self.HOLD_MAX, self._soltar_por_tiempo, args=(k,))
+                t.daemon = True
+                t.start()
+                self._hold = (k, t)
+
+    def _soltar_por_tiempo(self, k):
+        with self._hold_lock:
+            if self._hold and self._hold[0] == k:
+                self._hold = None
+                try:
+                    self._post("/keyup/" + k)
+                except Exception:
+                    pass
 
     def text(self, t):
         for ch in t:

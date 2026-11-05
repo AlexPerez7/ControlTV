@@ -211,7 +211,7 @@ async function fuente(n) {
   } catch (e) { setEstado(msgError(e, 'Sin conexión con ' + actual.nombre), true); }
 }
 
-// Pulsación larga real (dispositivos con `largo`, hoy Android TV): al pasar 450 ms se manda "start" y al soltar "end",
+// Pulsación larga real (dispositivos con `largo`: Android TV y Roku): al pasar 450 ms se manda "start" y al soltar "end",
 // y la propia TV hace el desplazamiento continuo. OK distingue toque (corta, al soltar) de mantener (larga).
 // El driver suelta solo a los 5 s si se pierde el "end".
 let holdActivo = null;  // función que suelta la tecla mantenida ahora
@@ -228,7 +228,8 @@ document.querySelectorAll('[data-k]').forEach(b => {
   // Al mantener pulsado no se manda otra tecla hasta que vuelva la anterior: si la TV va lenta no se acumulan
   // y deja de moverse al soltar.
   const pulsar = () => { if (enCurso) return; enCurso = true; key(k).finally(() => { enCurso = false; }); };
-  const largo = () => !!(actual && actual.largo) && (rep || k === 'Select');
+  // `largo` del dispositivo: true = flechas (rep) y OK; o la lista de teclas que se pueden mantener (Roku: sin OK)
+  const largo = () => { const l = actual && actual.largo; return l === true ? (rep || k === 'Select') : Array.isArray(l) && l.includes(k); };
   const soltar = () => {
     if (!activo) return;
     activo = false; clearTimeout(t1); clearInterval(t2); b.classList.remove('on');
