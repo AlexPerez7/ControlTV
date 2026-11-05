@@ -94,6 +94,11 @@ public class MainActivity extends Activity {
 
     @Override
     public void onRequestPermissionsResult(int codigo, String[] permisos, int[] resultados) {
+        if (codigo == PEDIDO_MIC) {
+            if (resultados.length == 0 || resultados[0] != PackageManager.PERMISSION_GRANTED) avisarVoz("Sin permiso de micrófono", true);
+            else avisarVoz("Permiso concedido: mantén pulsado de nuevo", false);
+            return;
+        }
         web.loadUrl("http://" + HOST + "/");  // si se denego, la web mostrara "Sin dispositivos"
     }
 
@@ -115,7 +120,62 @@ public class MainActivity extends Activity {
     /** La web avisa si la TV elegida admite volumen (aplicarCaps en index.html). */
     private volatile boolean tvConVolumen = false;
 
+    private static final int PEDIDO_MIC = 2;
+    private volatile boolean grabando;
+    private Thread hiloVoz;
+
+    private void avisarVoz(final String txt, final boolean err) {
+        runOnUiThread(() -> web.evaluateJavascript("vozEstado(" + org.json.JSONObject.quote(txt) + "," + err + ")", null));
+    }
+
+    /** Mantener pulsado: abre el asistente de la TV y envia el microfono (PCM 16 bit, mono, 8 kHz) hasta que se suelta. */
+    private void vozEmpezar(final String id) {
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[] {android.Manifest.permission.RECORD_AUDIO}, PEDIDO_MIC);
+            return;
+        }
+        if (grabando) return;
+        grabando = true;
+        hiloVoz = new Thread(() -> {
+            Driver d = api.driver(id);
+            android.media.AudioRecord mic = null;
+            boolean abierto = false;
+            try {
+                if (d == null) throw new Driver.DriverError("Dispositivo desconocido");
+                int min = android.media.AudioRecord.getMinBufferSize(8000, android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT);
+                mic = new android.media.AudioRecord(android.media.MediaRecorder.AudioSource.MIC, 8000,
+                        android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT, Math.max(min, 16000));
+                mic.startRecording();
+                avisarVoz("Abriendo el asistente...", false);
+                d.vozIniciar();
+                abierto = true;
+                avisarVoz("Escuchando... habla y suelta al terminar", false);
+                byte[] buf = new byte[4000];  // 0,25 s de audio a 8 kHz
+                while (grabando) {
+                    int n = mic.read(buf, 0, buf.length);
+                    if (n > 0) d.vozEnviar(buf, n);
+                    else if (n < 0) break;
+                }
+                avisarVoz("✓ Enviado al asistente", false);
+            } catch (Exception e) {
+                avisarVoz(e instanceof Driver.DriverError ? e.getMessage() : "Error de voz: " + e, true);
+            } finally {
+                grabando = false;
+                if (mic != null) { try { mic.stop(); } catch (RuntimeException e) { /* ya parado */ } mic.release(); }
+                if (abierto && d != null) { try { d.vozTerminar(); } catch (Exception e) { /* la TV cerro la sesion */ } }
+            }
+        });
+        hiloVoz.setDaemon(true);
+        hiloVoz.start();
+    }
+
     private final class Puente {
+        @android.webkit.JavascriptInterface
+        public void vozIniciar(String id) { vozEmpezar(id); }
+
+        @android.webkit.JavascriptInterface
+        public void vozFin() { grabando = false; }
+
         @android.webkit.JavascriptInterface
         public void volumen(boolean si) { tvConVolumen = si; }
 

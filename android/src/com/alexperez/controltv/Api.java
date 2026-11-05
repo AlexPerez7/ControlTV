@@ -112,6 +112,8 @@ final class Api {
         t.start();
     }
 
+    synchronized Driver driver(String id) { return dispositivos.get(id); }
+
     private synchronized Driver buscar(String id) { return dispositivos.get(id); }
 
     private Response fichas() throws Exception {

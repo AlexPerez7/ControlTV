@@ -47,6 +47,10 @@ abstract class Driver {
     void fuente(String nombre) throws Exception { throw new DriverError("Este dispositivo no admite cambiar de fuente"); }
 
     /** Mantener una tecla: accion "start" al pulsar y "end" al soltar. */
+    /** Asistente de voz: abre el asistente de la TV y deja listo el canal de audio. */
+    void vozIniciar() throws Exception { throw new DriverError("Este dispositivo no admite voz"); }
+    void vozEnviar(byte[] pcm, int n) throws Exception { throw new DriverError("Este dispositivo no admite voz"); }
+    void vozTerminar() throws Exception { throw new DriverError("Este dispositivo no admite voz"); }
     void keyHold(String k, String accion) throws Exception { throw new DriverError("Este dispositivo no admite mantener teclas"); }
 
     /** Teclas que admite (la web oculta las demas), o null si admite todas. */

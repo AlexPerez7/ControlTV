@@ -83,7 +83,7 @@ final class AndroidTV extends Driver {
     @Override String marca() { return "Android TV"; }
 
     @Override String[] caps() {  // sin red: no bloquea /devices
-        return pareado ? new String[] {"keys", "volume", "text", "apps", "link"} : new String[] {"pair"};
+        return pareado ? new String[] {"keys", "volume", "text", "apps", "link", "voice"} : new String[] {"pair"};
     }
 
     @Override String[] teclas() { return TECLAS.keySet().toArray(new String[0]); }
@@ -391,6 +391,9 @@ final class AndroidTV extends Driver {
                     Map<Integer, List<Object>> v = leer((byte[]) m.get(21).get(0));
                     imeContador = (int) entero(v, 1, 0);
                     imeCampo = (int) entero(v, 2, 0);
+                } else if (m.containsKey(30)) {  // remote_voice_begin: el asistente de la TV esta listo para recibir audio
+                    int id = (int) entero(leer((byte[]) m.get(30).get(0)), 1, 0);
+                    synchronized (vozLock) { vozSesion = id; vozLock.notifyAll(); }
                 } else if (m.containsKey(8)) {   // ping
                     long v = entero(leer((byte[]) m.get(8).get(0)), 1, 0);
                     enviar(s, f(9, f(1, v)));
@@ -466,6 +469,39 @@ final class AndroidTV extends Driver {
     private final Object holdLock = new Object();
     private String holdTecla;
     private java.util.Timer holdTimer;
+
+    // -- voz: tecla Busqueda -> la TV manda RemoteVoiceBegin(30) -> respondemos igual y mandamos Payload(31) PCM 16 bit mono 8 kHz -> End(32)
+    private final Object vozLock = new Object();
+    private int vozSesion = -1;
+
+    @Override void vozIniciar() throws Exception {
+        synchronized (vozLock) { vozSesion = -1; }
+        inyectar("Search", CORTA);
+        int id;
+        synchronized (vozLock) {
+            long fin = System.currentTimeMillis() + 3000;
+            while (vozSesion < 0 && System.currentTimeMillis() < fin) vozLock.wait(Math.max(1, fin - System.currentTimeMillis()));
+            id = vozSesion;
+        }
+        if (id < 0) throw new DriverError("La TV no abrió el asistente de voz");
+        mandar(f(30, f(1, id)));
+    }
+
+    @Override void vozEnviar(byte[] pcm, int n) throws Exception {
+        int id;
+        synchronized (vozLock) { id = vozSesion; }
+        if (id < 0) return;
+        // AudioRecord entrega little-endian, pero la TV espera las muestras big-endian (si no, detecta voz y no transcribe nada)
+        byte[] be = new byte[n & ~1];
+        for (int i = 0; i < be.length; i += 2) { be[i] = pcm[i + 1]; be[i + 1] = pcm[i]; }
+        mandar(f(31, cat(f(1, id), f(2, be))));
+    }
+
+    @Override void vozTerminar() throws Exception {
+        int id;
+        synchronized (vozLock) { id = vozSesion; vozSesion = -1; }
+        if (id >= 0) mandar(f(32, f(1, id)));
+    }
 
     private void inyectar(String k, int direccion) throws Exception {
         mandar(f(10, cat(f(1, TECLAS.get(k)), f(2, direccion))));

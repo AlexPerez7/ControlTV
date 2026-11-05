@@ -34,7 +34,7 @@
   .sel select { background:var(--btn); color:var(--txt); border:none; border-radius:12px; padding:0 12px; font-size:16px; height:44px; }
   .sel button { height:44px; padding:0 14px; font-size:14px; }
   .cap { display:none; }
-  body.c-keys .cap-keys, body.c-text .cap-text, body.c-apps .cap-apps, body.c-volume .cap-volume, body.c-pair .cap-pair { display:block; }
+  body.c-keys .cap-keys, body.c-text .cap-text, body.c-apps .cap-apps, body.c-volume .cap-volume, body.c-pair .cap-pair { display:block; } body.c-voice.en-app .cap-voice { display:block; }
   body.c-keys .row.cap-keys, body.c-text .row.cap-text { display:grid; }
   body.c-keys .cap-keys.pad { display:block; }
   .txt.cap { display:none; }  /* sin esto, .txt {display:flex} mostraba la caja de texto en TV que no la admiten */
@@ -167,6 +167,10 @@
 
   <small class="help cap cap-text" style="margin:-4px 0 14px">Con el campo vacío, ⌫ actúa como Atrás (así lo hace Android TV): si sigues pulsando, sale de la pantalla y puede cerrar la app. No lo mantengas pulsado en una búsqueda.</small>
 
+  <div class="row cap cap-voice">
+    <button id="voz" style="touch-action:none;user-select:none;-webkit-user-select:none">Asistente de voz (mantén pulsado)</button>
+  </div>
+
   <details id="detMas" class="cap cap-keys" style="display:none">
     <summary><svg class="ic" aria-hidden="true"><use href="#i-keyboard"/></svg> Más botones</summary>
     <div class="row c3">
@@ -236,7 +240,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) revi
 // Dispositivos: cada uno declara sus capacidades (keys, text, apps, volume).
 const selDev = document.getElementById('dev');
 let dispositivos = [], actual = null;
-const CAPS = ['keys', 'text', 'apps', 'volume', 'pair'];
+const CAPS = ['keys', 'text', 'apps', 'volume', 'pair', 'voice'];
 function aplicarCaps() {
   const caps = actual ? actual.caps : [];
   CAPS.forEach(c => document.body.classList.toggle('c-' + c, caps.includes(c)));
@@ -331,6 +335,16 @@ document.addEventListener('pointerdown', e => { if (e.target.closest('button, su
 document.addEventListener('pointerup', e => { if (e.target.closest('[data-k]')) tocar('tick'); }, true);
 
 const NOMBRE_TECLA = { Up: 'Arriba', Down: 'Abajo', Left: 'Izquierda', Right: 'Derecha', Select: 'OK', Back: 'Atrás', Home: 'Inicio', VolumeUp: 'Volumen +', VolumeDown: 'Volumen −', VolumeMute: 'Silencio', Play: 'Reproducir/Pausa', Rev: 'Retroceder', Fwd: 'Avanzar', Info: 'Info', Stop: 'Detener', Red: 'Rojo', Green: 'Verde', Yellow: 'Amarillo', Blue: 'Azul', PowerOff: 'Apagar', Power: 'Encender' };
+if (window.App && App.vozIniciar) document.body.classList.add('en-app');
+function vozEstado(t, err) { setEstado(t, err); }
+(function () {
+  const b = document.getElementById('voz');
+  let activo = false;
+  b.addEventListener('pointerdown', e => { if (!actual || activo) return; activo = true; b.setPointerCapture(e.pointerId); App.vozIniciar(actual.id); });
+  const soltar = () => { if (!activo) return; activo = false; App.vozFin(); };
+  b.addEventListener('pointerup', soltar); b.addEventListener('pointercancel', soltar);
+  b.addEventListener('contextmenu', e => e.preventDefault());
+})();
 async function key(k) {
   if (!actual) { setEstado('Elige un dispositivo', true); return; }
   try {
