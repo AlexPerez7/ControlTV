@@ -38,12 +38,14 @@
 </svg>
 <div class="wrap">
   <div class="top">
-    <button class="power solo-keys" data-k="Power" title="Encender/Apagar" aria-label="Encender o apagar"><svg class="ic" aria-hidden="true"><use href="#i-power"/></svg></button>
+    <button class="solo-roku" data-k="Back" aria-label="Atrás"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+    <button class="power solo-keys no-roku" data-k="Power" title="Encender/Apagar" aria-label="Encender o apagar"><svg class="ic" aria-hidden="true"><use href="#i-power"/></svg></button>
     <span class="estado" id="estado" aria-live="polite">Listo</span>
     <button class="solo-keys" data-k="Home" title="Inicio" aria-label="Inicio"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></button>
   </div>
 
   <div class="conn" id="conn">● Conectando…</div>
+  <div class="ahora" id="ahora" aria-live="polite"></div>
 
   <div id="compartir" style="display:none">
     <div class="lbl">Enlace compartido</div>
@@ -59,7 +61,7 @@
     <button id="buscar" title="Buscar dispositivos"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg> Buscar</button>
   </div>
 
-  <div class="row c3 cap cap-keys">
+  <div class="row c3 cap cap-keys no-roku">
     <button data-k="Back"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg> Atrás</button>
     <button data-k="Info"><svg class="ic" aria-hidden="true"><use href="#i-options"/></svg> Opciones</button>
     <button data-k="Search"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg> Buscar</button>
@@ -71,6 +73,12 @@
     <button class="ok" data-k="Select">OK</button>
     <button class="right" data-k="Right" data-rep aria-label="Derecha"><svg class="ic" aria-hidden="true"><use href="#i-right"/></svg></button>
     <button class="down" data-k="Down" data-rep aria-label="Abajo"><svg class="ic" aria-hidden="true"><use href="#i-down"/></svg></button>
+  </div>
+
+  <div class="row c3 cap cap-keys solo-roku">
+    <button data-k="InstantReplay"><svg class="ic" aria-hidden="true"><use href="#i-replay"/></svg> Repetir</button>
+    <button data-k="Info"><svg class="ic" aria-hidden="true"><use href="#i-options"/></svg> Opciones</button>
+    <button data-k="Search"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg> Buscar</button>
   </div>
 
   <div class="transporte cap cap-keys">
@@ -89,7 +97,7 @@
     <div class="volnum" id="volnum"></div>
   </div>
 
-  <div class="row c3 cap cap-keys">
+  <div class="row c3 cap cap-keys no-roku">
     <button data-k="InstantReplay"><svg class="ic" aria-hidden="true"><use href="#i-replay"/></svg> Repetir</button>
     <button data-k="PowerOff">Apagar</button>
     <button data-k="PowerOn">Encender</button>
@@ -114,7 +122,7 @@
     </div>
   </div>
 
-  <small class="help cap cap-text" style="margin:-4px 0 14px">Con el campo vacío, ⌫ actúa como Atrás (así lo hace Android TV): si sigues pulsando, sale de la pantalla y puede cerrar la app. No lo mantengas pulsado en una búsqueda.</small>
+  <small class="help cap cap-text no-roku" style="margin:-4px 0 14px">Con el campo vacío, ⌫ actúa como Atrás (así lo hace Android TV): si sigues pulsando, sale de la pantalla y puede cerrar la app. No lo mantengas pulsado en una búsqueda.</small>
 
   <div class="row cap cap-voice">
     <button id="voz" style="touch-action:none;user-select:none;-webkit-user-select:none">Asistente de voz (mantén pulsado)</button>

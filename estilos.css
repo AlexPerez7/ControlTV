@@ -2,7 +2,8 @@
    Nombres --btn/--btn2/--acc/--red se conservan: el JS los usa en estilos en línea. */
 :root {
   --bg:#0d1014; --surface:#151a20; --btn:#1e242c; --btn2:#2a323d; --line:#2a313a;
-  --txt:#e8ecf1; --muted:#98a3b0; --acc:#7cb0ff; --on-acc:#071322; --red:#3a1b1d; --red-txt:#ff9b8f;
+  --txt:#e8ecf1; --muted:#98a3b0; --acc:#7cb0ff; --on-acc:#071322; --acc-hover:#a3c8ff; --halo1:#7cb0ff1f; --halo2:#7cb0ff40;
+  --red:#3a1b1d; --red-txt:#ff9b8f;
   --ok:#6fd3a0; --mal:#ff8f84; --r:16px;
 }
 * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none; }
@@ -30,6 +31,12 @@ button:disabled { opacity:.4; }
 .c2 { grid-template-columns:1fr 1fr; } .c4 { grid-template-columns:repeat(4,1fr); } .c3 { grid-template-columns:1fr 1fr 1fr; }
 
 /* Conexión: un punto de estado discreto */
+/* Cada marca tiene su mando: el Roku lleva Atrás arriba, Repetir/Opciones/Buscar bajo el anillo, las apps a mano y su morado. */
+body:not(.m-roku) .solo-roku { display:none !important; }
+body.m-roku .no-roku { display:none !important; }
+body.m-roku { --acc:#b794ff; --on-acc:#14082b; --acc-hover:#cfb6ff; --halo1:#b794ff22; --halo2:#b794ff44; }
+.ahora { display:none; font-size:14px; text-align:center; margin:-8px 0 14px; color:var(--txt); }
+body.m-roku .ahora:not(:empty) { display:block; }
 .conn { font-size:13px; text-align:center; margin:0 0 14px; color:var(--muted); }
 .conn.ok { color:var(--ok); } .conn.mal { color:var(--mal); }
 
@@ -56,8 +63,8 @@ body:not(.c-keys) .solo-keys, button.sin-tecla { visibility:hidden; }  /* oculto
 .pad button:active { background:var(--btn2); }
 .pad .up{top:3%;left:35.5%} .pad .down{bottom:3%;left:35.5%} .pad .left{left:3%;top:35.5%} .pad .right{right:3%;top:35.5%}
 .pad .ok { top:30%; left:30%; width:40%; height:40%; background:var(--acc); color:var(--on-acc); font-weight:700; font-size:22px;
-           box-shadow:0 0 0 6px #7cb0ff1f, 0 0 28px #7cb0ff40, inset 0 1px 0 #ffffff66; }
-.pad .ok:active { background:#a3c8ff; }
+           box-shadow:0 0 0 6px var(--halo1), 0 0 28px var(--halo2), inset 0 1px 0 #ffffff66; }
+.pad .ok:active { background:var(--acc-hover); }
 
 /* Grupos como pastillas segmentadas (transporte y volumen) */
 .vol, .transporte { display:grid; grid-template-columns:1fr 1fr 1fr; gap:2px; background:var(--line); border-radius:20px; overflow:hidden; margin-bottom:12px; }
@@ -72,7 +79,7 @@ body:not(.c-keys) .solo-keys, button.sin-tecla { visibility:hidden; }  /* oculto
 .txt input:focus-visible { outline-offset:0; }
 .txt button, #compEnviar, #instalarAct { background:var(--acc); color:var(--on-acc); font-weight:600; }
 .txt button { height:52px; padding:0 18px; }
-.txt button:active, #compEnviar:active, #instalarAct:active { background:#a3c8ff; }
+.txt button:active, #compEnviar:active, #instalarAct:active { background:var(--acc-hover); }
 
 .apps { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding-bottom:4px; }
 .apps button { height:auto; aspect-ratio:3/2; padding:0; overflow:hidden; background:#000; border-radius:14px; }

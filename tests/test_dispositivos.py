@@ -125,6 +125,71 @@ class EncenderSinRed(unittest.TestCase):
             self._tv("").key("Power")
 
 
+class RokuPruebas(unittest.TestCase):
+    INFO = ("<device-info><vendor-name>Roku</vendor-name><model-name>Roku Express</model-name>"
+            "<user-device-name>Sala</user-device-name><serial-number>X00400M33V6H</serial-number>"
+            "<wifi-mac>bc:d7:d4:da:b8:87</wifi-mac></device-info>")
+
+    def test_probe_lee_modelo_serie_y_mac(self):
+        with mock.patch.object(d, "_http", return_value=(self.INFO.encode(), "text/xml")):
+            r = d.Roku.probe("192.168.31.110")
+        self.assertEqual((r.modelo, r.nombre, r.uid, r.mac), ("Roku Express", "Sala", "X00400M33V6H", "bc:d7:d4:da:b8:87"))
+
+    def test_probe_ignora_otras_marcas_y_errores(self):
+        with mock.patch.object(d, "_http", return_value=(b"<device-info><vendor-name>Otra</vendor-name></device-info>", "")):
+            self.assertIsNone(d.Roku.probe("192.168.31.1"))
+        with mock.patch.object(d, "_http", side_effect=d.DriverError("sin red")):
+            self.assertIsNone(d.Roku.probe("192.168.31.1"))
+
+    def test_apps(self):
+        xml = ('<apps><app id="12" type="appl" version="1">Netflix</app>'
+               '<app id="837" type="appl" version="2">YouTube &amp; Co</app></apps>')
+        with mock.patch.object(d, "_http", return_value=(xml.encode(), "text/xml")):
+            apps = d.Roku("192.168.31.110").apps()
+        self.assertEqual([(a["id"], a["name"]) for a in apps], [("12", "Netflix"), ("837", "YouTube & Co")])
+
+    def test_teclas_y_texto(self):
+        r = d.Roku("192.168.31.110")
+        with mock.patch.object(d, "_http") as h:
+            r.key("Select")
+            r.text("a ñ")
+        urls = [c.args[0] for c in h.call_args_list]
+        self.assertEqual(urls[0], "http://192.168.31.110:8060/keypress/Select")
+        self.assertEqual(urls[1:], ["http://192.168.31.110:8060/keypress/Lit_a", "http://192.168.31.110:8060/keypress/Lit_%20",
+                                     "http://192.168.31.110:8060/keypress/Lit_%C3%B1"])
+
+    def test_no_declara_encendido_ni_volumen(self):
+        self.assertNotIn("Power", d.Roku.teclas)
+        self.assertNotIn("VolumeUp", d.Roku.teclas)
+        self.assertNotIn("volume", d.Roku.caps)
+
+    APP = '<active-app><app id="562859" type="home">Roku Dynamic Menu</app>{}</active-app>'
+    SS = '<screensaver id="55545" type="ssvr">Roku City</screensaver>'
+
+    def test_estado_inicio_y_salvapantallas(self):
+        self.assertEqual(d.Roku.interpretar_estado(self.APP.format("")), {"actividad": "inicio"})
+        self.assertEqual(d.Roku.interpretar_estado(self.APP.format(self.SS)), {"actividad": "salvapantallas"})
+        self.assertEqual(d.Roku.interpretar_estado("<active-app></active-app>"), {"actividad": "inicio"})
+
+    def test_estado_app_con_reproductor(self):
+        app = '<active-app><app id="837" type="appl" version="1">YouTube</app></active-app>'
+        pausa = '<player state="pause" error="false"/>'
+        self.assertEqual(d.Roku.interpretar_estado(app, pausa), {"actividad": "app", "app": "YouTube", "reproductor": "pause"})
+        self.assertEqual(d.Roku.interpretar_estado(app, '<player state="close" error="false"/>'),
+                         {"actividad": "app", "app": "YouTube"})
+        self.assertEqual(d.Roku.interpretar_estado(app), {"actividad": "app", "app": "YouTube"})
+
+    def test_estado_sin_dato_del_reproductor(self):
+        app = '<active-app><app id="837" type="appl">YouTube</app></active-app>'
+
+        def http(url, **kw):
+            if "media-player" in url:
+                raise d.DriverError("sin respuesta")
+            return app.encode(), "text/xml"
+        with mock.patch.object(d, "_http", side_effect=http):
+            self.assertEqual(d.Roku("192.168.31.110").estado(), {"actividad": "app", "app": "YouTube"})
+
+
 class Emparejamiento(unittest.TestCase):
     def test_el_socket_caduca_solo(self):
         tv = d.AndroidTV("192.168.31.108")

@@ -15,6 +15,11 @@ final class Roku extends Driver {
     @Override String marca() { return "Roku"; }
     @Override String[] caps() { return new String[] {"keys", "text", "apps"}; }
 
+    // El Roku Express no tiene encendido, volumen ni teclado numerico (eso solo lo traen los Roku TV): la web oculta el resto.
+    private static final String[] TECLAS = {"Home", "Back", "Up", "Down", "Left", "Right", "Select", "Rev", "Fwd", "Play",
+            "InstantReplay", "Info", "Search", "Enter", "Backspace"};
+    @Override String[] teclas() { return TECLAS; }
+
     static Roku probe(String ip) {
         try {
             String x = Net.get("http://" + ip + ":8060/query/device-info", 2000).text();
@@ -50,6 +55,32 @@ final class Roku extends Driver {
             post("/keypress/Lit_" + Net.pct(new String(Character.toChars(cp))));
             i += Character.charCount(cp);
         }
+    }
+
+    /** De /query/active-app (+ /query/media-player) a {actividad: inicio|salvapantallas|app, app, reproductor}. */
+    static JSONObject interpretarEstado(String xmlApp, String xmlPlayer) throws Exception {
+        String actividad;
+        Matcher app = Pattern.compile("<app\\s([^>]*)>([^<]*)</app>").matcher(xmlApp);
+        boolean hayApp = app.find();
+        if (xmlApp.contains("<screensaver")) actividad = "salvapantallas";  // tapa lo que haya debajo
+        else if (!hayApp || app.group(1).contains("type=\"home\"")) actividad = "inicio";
+        else actividad = "app";
+        JSONObject res = new JSONObject().put("actividad", actividad);
+        if (actividad.equals("app")) {
+            res.put("app", unesc(app.group(2)).trim());
+            Matcher p = Pattern.compile("<player[^>]*\\sstate=\"([^\"]*)\"").matcher(xmlPlayer == null ? "" : xmlPlayer);
+            if (p.find() && !p.group(1).equals("close") && !p.group(1).equals("none")) res.put("reproductor", p.group(1));
+        }
+        return res;
+    }
+
+    @Override JSONObject estado() throws Exception {
+        String a = Net.get("http://" + ip + ":8060/query/active-app", 2000).text();
+        String player = null;
+        if (interpretarEstado(a, null).getString("actividad").equals("app")) {
+            try { player = Net.get("http://" + ip + ":8060/query/media-player", 2000).text(); } catch (Exception e) { /* solo la app */ }
+        }
+        return interpretarEstado(a, player);
     }
 
     @Override JSONArray apps() throws Exception {

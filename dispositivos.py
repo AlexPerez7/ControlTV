@@ -167,6 +167,9 @@ class Driver:
 class Roku(Driver):
     marca = "Roku"
     caps = ("keys", "text", "apps")
+    # El Roku Express no tiene encendido, volumen ni teclado numérico (eso solo lo traen los Roku TV): la web oculta el resto.
+    teclas = ("Home", "Back", "Up", "Down", "Left", "Right", "Select", "Rev", "Fwd", "Play", "InstantReplay", "Info",
+              "Search", "Enter", "Backspace")
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
@@ -202,6 +205,37 @@ class Roku(Driver):
     def text(self, t):
         for ch in t:
             self._post("/keypress/Lit_" + urllib.parse.quote(ch, safe=""))
+
+    @staticmethod
+    def interpretar_estado(xml_app, xml_player=""):
+        """De /query/active-app (+ /query/media-player) a {"actividad": inicio|salvapantallas|app, "app", "reproductor"}."""
+        raiz = ET.fromstring(xml_app)
+        app, ss = raiz.find("app"), raiz.find("screensaver")
+        if ss is not None:  # el salvapantallas tapa lo que haya debajo
+            actividad = "salvapantallas"
+        elif app is None or app.get("type") == "home":
+            actividad = "inicio"
+        else:
+            actividad = "app"
+        res = {"actividad": actividad}
+        if actividad == "app":
+            res["app"] = (app.text or "").strip()
+            if xml_player:
+                estado = ET.fromstring(xml_player).get("state")  # play, pause, buffer, startup, stop, close
+                if estado and estado not in ("close", "none"):
+                    res["reproductor"] = estado
+        return res
+
+    def estado(self):
+        cuerpo, _ = _http(f"http://{self.ip}:8060/query/active-app", timeout=2)
+        res = self.interpretar_estado(cuerpo)
+        if res["actividad"] == "app":
+            try:
+                reproductor, _ = _http(f"http://{self.ip}:8060/query/media-player", timeout=2)
+                res = self.interpretar_estado(cuerpo, reproductor)
+            except DriverError:
+                pass  # sin dato del reproductor: se muestra solo la app
+        return res
 
     def apps(self):
         cuerpo, _ = _http(f"http://{self.ip}:8060/query/apps")

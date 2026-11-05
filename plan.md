@@ -11,7 +11,7 @@ y la interfaz muestra solo los botones que soporta. `servidor.ps1` es la version
 
 | Dispositivo | Driver | Funciona | Pendiente |
 |---|---|---|---|
-| Roku Express (192.168.31.110) | `Roku` (ECP :8060) | teclas, texto, apps, iconos | - |
+| Roku Express (192.168.31.110) | `Roku` (ECP :8060) | teclas, texto, apps, iconos; mando propio en la app; estado (inicio/salvapantallas/app y reproductor) | pulsación larga (keydown/keyup), búsqueda de contenido |
 | Hisense TN40.V0021.K221.WAM, 40" (192.168.31.192) | `Hisense` | volumen +/- y mute, abrir YouTube/Netflix (DIAL) | teclas, encendido/apagado, fuente |
 | Caixun Android TV (192.168.31.108) | `AndroidTV` (Android TV Remote v2, :6466/:6467) | teclas, volumen, encendido, abrir apps (YouTube, Prime, Disney+, HBO Max probados); emparejado; Wake-on-LAN; iconos reales (app) | - |
 | onn E58D62UN Vestel (192.168.31.145) | `Vestel` (solo manual) | nada (ver abajo) | ver abajo |
@@ -59,6 +59,12 @@ y la interfaz muestra solo los botones que soporta. `servidor.ps1` es la version
 - **YouTube** pide elegir perfil ("¿Quién está viendo?") al abrirse desde un enlace: el envío funciona hasta ahí.
 - **Teclas probadas ahora:** `Ajustes` abre `com.android.tv.settings` desde el inicio y `Atrás` vuelve; `Info` no hace nada en la pantalla de perfiles de YouTube; `Menú` desde el inicio sin efecto. Los números (`Num0-9`) solo tienen sentido con señal de TV (la Caixun no tiene antena): sin verificar.
 - Las capturas de la pantalla de la TV por ADB (`adb -s 192.168.31.108:5555 exec-out screencap -p`) traen unas líneas de texto antes del PNG: recortar desde `\x89PNG`.
+
+### Roku Express: lo descubierto (5-nov-2026)
+- `device-info`: `is-tv=false`, `supports-suspend=false`, `supports-wake-on-wlan=false` → **sin encendido, apagado ni volumen** (eso solo lo traen los Roku TV). `supports-find-remote` y `supports-private-listening` son `true` (sin usar).
+- `GET /query/active-app` da la app (`type="home"` = inicio) y, si está activo, `<screensaver>`; `GET /query/media-player` da `<player state="play|pause|buffer|startup|stop|close">`. El driver los junta en `estado()` → `{actividad: inicio|salvapantallas|app, app, reproductor}` (con el salvapantallas activo, `app` sigue siendo el inicio: manda el salvapantallas).
+- **Mando propio en la app/web:** la web pone la clase `m-<marca>` en `<body>`; `.solo-roku` / `.no-roku` (estilos.css) cambian la disposición. Roku: Atrás arriba a la izquierda (donde Android TV pone el encendido) e Inicio a la derecha, línea "Ahora" (inicio / salvapantallas / "YouTube · en pausa", sondeo cada 5 s), anillo morado, Repetir·Opciones·Buscar bajo el anillo, reproducción, texto y el panel de apps abierto desde el principio. Sin encendido, apagado, volumen ni la nota del ⌫ (esa es de Android TV). El driver declara `teclas` para que la web oculte lo que el Roku no entiende.
+- Pruebas: 8 nuevas del Roku (`RokuPruebas`: `probe`, apps, teclas/texto, estado) sin red.
 
 ### Hisense: lo descubierto (nov 2026)
 - Puertos abiertos: 9085 (UPnP/Twonky), 56789 (DIAL), 56790 (descripcion `dd.xml`), 8060 y 13000 (aceptan conexion, sin respuesta HTTP).

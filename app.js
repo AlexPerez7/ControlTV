@@ -28,6 +28,9 @@ const CAPS = ['keys', 'text', 'apps', 'volume', 'pair', 'voice'];
 function aplicarCaps() {
   const caps = actual ? actual.caps : [];
   CAPS.forEach(c => document.body.classList.toggle('c-' + c, caps.includes(c)));
+  // Cada marca tiene su propio mando (clases m-roku, m-android-tv, m-hisense...): ver estilos.css
+  [...document.body.classList].filter(c => c.startsWith('m-')).forEach(c => document.body.classList.remove(c));
+  if (actual) document.body.classList.add('m-' + actual.marca.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
   // Si el dispositivo declara qué teclas admite, se ocultan los botones de las demás.
   const teclas = actual && actual.teclas;
   document.querySelectorAll('[data-k]').forEach(b => b.classList.toggle('sin-tecla', !!teclas && !teclas.includes(b.dataset.k)));
@@ -39,8 +42,9 @@ function aplicarCaps() {
   const ETQ = { HDMI1: 'HDMI 1', HDMI2: 'HDMI 2', HDMI3: 'HDMI 3', Composite: 'Compuesto', TV: 'TV', Inicio: 'Inicio' };
   fu.forEach(n => { const b = document.createElement('button'); b.textContent = ETQ[n] || n; b.onclick = () => fuente(n); cont.appendChild(b); });
   appsCargadas = false; document.getElementById('apps').textContent = '';
-  document.getElementById('detApps').open = false;
+  document.getElementById('detApps').open = !!actual && actual.marca === 'Roku';  // en el Roku las apps son parte del mando
   document.getElementById('volnum').textContent = '';
+  refrescarAhora();
   if (caps.includes('volume')) refrescarVolumen();
   if (window.App) App.volumen(caps.includes('volume'));  // la app usa los botones de volumen del celular
   revisarCompartido();
@@ -58,6 +62,21 @@ document.getElementById('macGuardar').addEventListener('click', () => {
   if (App.guardarMac(actual.id, macTv.value)) { macTv.value = App.mac(actual.id); setEstado('✓ MAC guardada: Encender también la despierta por la red'); }
   else setEstado('La MAC son 6 pares de letras y números, como aa:bb:cc:dd:ee:ff', true);
 });
+// "Ahora": qué muestra el Roku (inicio, salvapantallas o la app y su estado). Solo para dispositivos que lo informan.
+const ahora = document.getElementById('ahora');
+const REPRODUCTOR = { play: 'reproduciendo', pause: 'en pausa', buffer: 'cargando', startup: 'cargando' };
+async function refrescarAhora() {
+  if (!actual || actual.marca !== 'Roku' || document.hidden) { ahora.textContent = ''; return; }
+  const id = actual.id;
+  try {
+    const e = await (await fetch('/d/' + id + '/estado', { cache: 'no-store' })).json();
+    if (!actual || actual.id !== id) return;  // se cambió de dispositivo mientras tanto
+    ahora.textContent = e.actividad === 'salvapantallas' ? 'Salvapantallas' : e.actividad === 'inicio' ? 'En el inicio'
+      : (e.app || '') + (REPRODUCTOR[e.reproductor] ? ' · ' + REPRODUCTOR[e.reproductor] : '');
+  } catch { ahora.textContent = ''; }
+}
+setInterval(refrescarAhora, 5000);
+document.addEventListener('visibilitychange', refrescarAhora);
 // ● en línea, ○ sin respuesta, nada mientras no se sabe (lo actualiza refrescarEnLinea)
 const enLineaDev = {};
 function etiqueta(d) {
