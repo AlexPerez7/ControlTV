@@ -283,3 +283,27 @@ class HisenseVolumen(unittest.TestCase):
         self.vol = 0  # p. ej. tras reiniciar el servidor
         self.tv.key("VolumeMute")
         self.assertEqual(self.vol, d.Hisense.VOL_SIN_MUTE)
+
+
+class Rendimiento(unittest.TestCase):
+    def test_iconos_de_roku_se_bajan_una_vez(self):
+        llamadas = []
+        original = d._http
+        d._http = lambda url, *a, **k: llamadas.append(url) or (b"png", "image/png")
+        try:
+            r = d.Roku("192.0.2.1")
+            self.assertEqual(r.icon("12"), (b"png", "image/png"))
+            r.icon("12")
+            r.icon("13")
+        finally:
+            d._http = original
+        self.assertEqual(len(llamadas), 2)
+
+    def test_online_sin_red_si_la_conexion_esta_viva(self):
+        tv = d.AndroidTV("192.0.2.1")  # IP de documentacion: si tocara la red, daria False
+        tv._sock = object()
+        tv._listo.set()
+        tv._ultimo_msg = d.time.time()
+        self.assertTrue(tv.online())
+        tv._ultimo_msg -= tv.VIVA + 1  # la TV callada: puede estar apagada, se comprueba por red
+        self.assertFalse(tv.online())

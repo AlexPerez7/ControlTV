@@ -71,6 +71,7 @@ final class AndroidTV extends Driver {
     private final Object conn = new Object();
     /** Si conectar acaba de fallar, las teclas siguientes fallan al instante en vez de esperar otro timeout cada una. */
     private volatile long falloHasta;
+    private volatile long ultimoMsg;  // cuando llego el ultimo mensaje de la TV por la conexion de control
     private static final long ESPERA_TRAS_FALLO_MS = 3000;
     private final Object envio = new Object();
     private SSLSocket pairSock;
@@ -86,6 +87,9 @@ final class AndroidTV extends Driver {
     }
 
     @Override String[] teclas() { return TECLAS.keySet().toArray(new String[0]); }
+
+    /** Estado guardado del ultimo escaneo; si ya no vale, la primera tecla falla y preparar() lo corrige al reescanear. */
+    void restaurarPareado(boolean si) { pareado = si; }
 
     @Override void preparar() {
         if (!pareado) pareado = comprobarPareado();
@@ -350,6 +354,9 @@ final class AndroidTV extends Driver {
 
     // ---- control -------------------------------------------------------------------------
     @Override boolean online() {
+        // Conexion de control viva y la TV hablo hace poco (manda pings): sin tocar la red. Si la TV se apaga de golpe
+        // el socket puede seguir "abierto", por eso cuenta el ultimo mensaje y no solo que exista.
+        if (sock != null && listo && System.currentTimeMillis() - ultimoMsg < 12000) return true;
         try (Socket s = new Socket()) {
             s.connect(new InetSocketAddress(ip, PROBE_PORT), 1500);
             return true;
@@ -367,6 +374,7 @@ final class AndroidTV extends Driver {
             s.setSoTimeout(0);
             while (true) {
                 Map<Integer, List<Object>> m = leer(leerMsg(s));
+                ultimoMsg = System.currentTimeMillis();
                 if (m.containsKey(1)) {          // la TV pide nuestra configuracion
                     byte[] dev = cat(f(1, "Control TV"), f(2, "Control TV"), f(3, 1), f(4, "1"), f(5, "control.tv"), f(6, "1.0.0"));
                     enviar(s, f(1, cat(f(1, 622), f(2, dev))));

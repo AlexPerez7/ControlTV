@@ -136,11 +136,11 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
 ### Rendimiento
 - [x] **A** · (hecho: servidor ~5,6 s → ~3,2 s; la app prueba IP×puerto a la vez y sigue encontrando Caixun y Roku, sin medir el tiempo) Escaneo del servidor: los `probe` se hacen uno tras otro por IP (cada uno espera hasta 1,5-2 s). Hacerlos en
       paralelo (ThreadPoolExecutor, como ya hace `puerto_abierto`) y lanzar SSDP y el barrido de puertos a la vez: de ~10 s a ~3 s.
-- [ ] **B** · Roku: cada tecla y cada letra del texto abren una conexión HTTP nueva. Reutilizar la conexión
+- [-] **B** · (descartado tras medir, nov 2026: 40 peticiones alternadas al Roku, mediana 22 ms con conexión nueva y 21 ms reutilizándola; en la red local abrir TCP cuesta ~1 ms) Roku: cada tecla y cada letra del texto abren una conexión HTTP nueva. Reutilizar la conexión
       (`http.client.HTTPConnection` con keep-alive) baja la latencia y acelera mucho el envío de texto.
-- [ ] **B** · App Android: `Discovery` prueba los puertos de cada IP uno tras otro (8060, 56790, 6466 → hasta 1,2 s por IP).
+- [x] **B** · (hecho en la primera revisión: prueba IP×puerto a la vez; el barrido completo mide ~2,5 s en el celular) App Android: `Discovery` prueba los puertos de cada IP uno tras otro (8060, 56790, 6466 → hasta 1,2 s por IP).
       Probarlos a la vez, o empezar por las IPs que responden a SSDP/mDNS.
-- [ ] **C** · Guardar la lista de dispositivos del último escaneo y mostrarla al instante al abrir la web/app, y reescanear en
+- [x] **C** · (hecho en la segunda revisión, ver Rendimiento) Guardar la lista de dispositivos del último escaneo y mostrarla al instante al abrir la web/app, y reescanear en
       segundo plano.
 
 ### Diseño del código
@@ -208,12 +208,12 @@ Lo que ya estaba arriba no se repite (salvo cuando cambia la prioridad). A = muc
 - [x] **C** · (hecho: `--ip`, aviso si no es IP privada y muestra la red que revisa; el barrido sigue siendo /24) Con VPN o varias interfaces, `ip_local()` puede elegir la red equivocada, y el barrido supone /24: opción `--ip`/`--red`.
 
 ### 2. Rendimiento
-- [ ] **A** · Iconos de Roku con `Cache-Control: no-store` (y la app con `LOAD_NO_CACHE`): se bajan de la TV cada vez. `max-age` en `/icon/`.
-- [ ] **A** · (antes C) La app hace un barrido completo al abrirse antes de mostrar nada: guardar el último listado y mostrarlo al instante; reescanear en segundo plano.
-- [ ] **B** · `AndroidTV.online()` abre una conexión TCP al 6466 cada 10 s aunque haya un socket TLS vivo: si está listo, `True` sin red.
-- [ ] **B** · `onNewIntent` recarga toda la página al compartir: basta `evaluateJavascript("revisarCompartido()")`.
-- [ ] **C** · `_leer_msg` lee la longitud con `recv(1)` byte a byte: usar `makefile('rb')`.
-- [ ] **C** · En la app, el sondeo `/ping` cada 4 s no aporta (la API es local): desactivarlo si existe `window.App`.
+- [x] **A** · (hecho: caché en memoria en el driver Python y Java + `max-age` en el servidor; 12 iconos = 305 KB y 0,5 s que ya no se repiten; probado: 586 ms la primera vez, 3,5 ms la segunda) Iconos de Roku con `Cache-Control: no-store` (y la app con `LOAD_NO_CACHE`): se bajan de la TV cada vez. `max-age` en `/icon/`.
+- [x] **A** · (hecho y probado en el celular: la lista se guarda en SharedPreferences, la app abre con la Caixun lista a ~1 s, antes ~2,5 s más de barrido; cabecera `X-Escaneando` + `POST /scan?esperar=1` y la web refresca sin cerrar paneles) (antes C) La app hace un barrido completo al abrirse antes de mostrar nada: guardar el último listado y mostrarlo al instante; reescanear en segundo plano.
+- [x] **B** · (hecho, Python y Java: sin red si la TV mandó algo en los últimos 12 s; si no, la comprobación de siempre. Sin verificar cada cuánto manda pings la TV: si no los manda, solo se pierde el ahorro) `AndroidTV.online()` abre una conexión TCP al 6466 cada 10 s aunque haya un socket TLS vivo: si está listo, `True` sin red.
+- [x] **B** · (hecho; sin probar compartiendo un enlace real) `onNewIntent` recarga toda la página al compartir: basta `evaluateJavascript("revisarCompartido()")`.
+- [-] **C** · (descartado: la longitud son 1-2 bytes por mensaje y el cuerpo ya se lee en bloque; no hay ganancia medible) `_leer_msg` lee la longitud con `recv(1)` byte a byte: usar `makefile('rb')`.
+- [x] **C** · (hecho: en la app solo se comprueba al abrir y al volver a la app) En la app, el sondeo `/ping` cada 4 s no aporta (la API es local): desactivarlo si existe `window.App`.
 
 ### 3. Funciones nuevas
 - [ ] **A** · Roku TV: leer `is-tv`/`supports-*` de `device-info` para declarar volumen, encendido y fuentes (`InputHDMI1`...).

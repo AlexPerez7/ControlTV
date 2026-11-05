@@ -64,7 +64,15 @@ final class Roku extends Driver {
 
     @Override void launch(String appId) throws Exception { post("/launch/" + Net.pct(seguro(appId))); }
 
+    /** En memoria: el icono de una app no cambia, y abrir "Aplicaciones" bajaba ~300 KB del Roku cada vez. */
+    private final java.util.Map<String, Net.Resp> iconos = new java.util.concurrent.ConcurrentHashMap<>();
+
     @Override Net.Resp icon(String appId) throws Exception {
-        return Net.get("http://" + ip + ":8060/query/icon/" + Net.pct(seguro(appId)), 4000);
+        Net.Resp r = iconos.get(appId);
+        if (r == null) {
+            r = Net.get("http://" + ip + ":8060/query/icon/" + Net.pct(seguro(appId)), 4000);
+            iconos.put(appId, r);
+        }
+        return r;
     }
 }

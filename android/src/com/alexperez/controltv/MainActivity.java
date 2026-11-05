@@ -27,7 +27,7 @@ import java.util.Map;
 public class MainActivity extends Activity {
     private static final String HOST = "controltv.local";
     private static final String PERMISO_RED_LOCAL = "android.permission.ACCESS_LOCAL_NETWORK";
-    private final Api api = new Api();
+    private Api api;
     /** Enlace recibido por "Compartir"; la web lo muestra y espera a que el usuario lo envie a la TV. */
     private volatile String compartido = "";
     private WebView web;
@@ -36,6 +36,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         AndroidTV.contexto = getApplicationContext();
+        api = new Api(getApplicationContext());
         leerCompartido(getIntent());
         web = new WebView(this);
         web.setBackgroundColor(0xFF14161A);
@@ -61,7 +62,9 @@ public class MainActivity extends Activity {
                 if (ruta.equals("/icono.svg")) return respuesta(200, "image/svg+xml", asset("icono.svg"));
                 if (ruta.equals("/manifest.json")) return respuesta(404, "text/plain", new byte[0]);
                 Api.Response a = api.manejar(r.getMethod(), ruta, u.getEncodedQuery());
-                return respuesta(a.code, a.type, a.body);
+                WebResourceResponse w = respuesta(a.code, a.type, a.body);
+                if (a.escaneando) w.getResponseHeaders().put("X-Escaneando", "1");
+                return w;
             }
 
             @Override
@@ -106,7 +109,7 @@ public class MainActivity extends Activity {
     protected void onNewIntent(android.content.Intent i) {
         super.onNewIntent(i);
         leerCompartido(i);
-        web.loadUrl("http://" + HOST + "/");  // recarga: la web muestra el enlace pendiente
+        web.evaluateJavascript("revisarCompartido()", null);  // muestra el enlace sin recargar la pagina
     }
 
     /** La web avisa si la TV elegida admite volumen (aplicarCaps en index.html). */

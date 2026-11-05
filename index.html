@@ -222,7 +222,8 @@ async function revisarConexion() {
     if (ok) cargarDispositivos();
   }
 }
-revisarConexion(); setInterval(revisarConexion, 4000);
+// En la app la "API" corre en el propio celular: no hay servidor que se pueda caer, basta comprobarlo al volver.
+revisarConexion(); if (!window.App) setInterval(revisarConexion, 4000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) revisarConexion(); });
 
 // Dispositivos: cada uno declara sus capacidades (keys, text, apps, volume).
@@ -267,7 +268,16 @@ setInterval(refrescarEnLinea, 10000);
 document.addEventListener('visibilitychange', refrescarEnLinea);
 
 async function cargarDispositivos() {
-  try { dispositivos = await (await fetch('/devices', { cache: 'no-store' })).json(); } catch { return; }
+  let escaneando = false;
+  try {
+    const r = await fetch('/devices', { cache: 'no-store' });
+    escaneando = r.headers.get('X-Escaneando') === '1';  // la app muestra la lista guardada mientras reescanea
+    dispositivos = await r.json();
+  } catch { return; }
+  if (escaneando) {
+    fetch('/scan?esperar=1', { method: 'POST' }).then(() => cargarDispositivos()).catch(() => {});
+    if (!dispositivos.length) { setEstado('Buscando dispositivos...'); return; }
+  }
   const guardado = localStorage.getItem('dispositivo');
   selDev.textContent = '';
   dispositivos.forEach(d => {
@@ -277,7 +287,9 @@ async function cargarDispositivos() {
   });
   if (!dispositivos.length) { setEstado('Sin dispositivos: enciéndelos y pulsa Buscar', true); actual = null; aplicarCaps(); return; }
   selDev.value = dispositivos.some(d => d.id === guardado) ? guardado : dispositivos[0].id;
-  elegir();
+  // Si el elegido no cambio (p. ej. al terminar el escaneo de fondo), no se rehace la pantalla: no cierra paneles abiertos
+  const nuevo = dispositivos.find(d => d.id === selDev.value);
+  if (actual && nuevo && JSON.stringify(actual) === JSON.stringify(nuevo)) actual = nuevo; else elegir();
   refrescarEnLinea();
 }
 function elegir() {

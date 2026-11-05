@@ -18,7 +18,20 @@ final class Api {
         final int code;
         final String type;
         final byte[] body;
+        /** /devices: true si la lista viene de la memoria y hay un escaneo en segundo plano (cabecera X-Escaneando). */
+        boolean escaneando;
         Response(int code, String type, byte[] body) { this.code = code; this.type = type; this.body = body; }
+    }
+
+    /**
+     * Ultima lista de dispositivos, guardada en el celular: al abrir la app se muestra al instante (sin esperar el
+     * barrido de la red, varios segundos) y se reescanea en segundo plano.
+     */
+    private final android.content.SharedPreferences prefs;
+    private final java.util.concurrent.atomic.AtomicBoolean enFondo = new java.util.concurrent.atomic.AtomicBoolean();
+
+    Api(android.content.Context ctx) {
+        prefs = ctx.getSharedPreferences("controltv", android.content.Context.MODE_PRIVATE);
     }
 
     private static final Pattern RUTA = Pattern.compile("/d/([a-z0-9-]+)/(\\w+)(?:/([\\w.-]+))?");
@@ -71,16 +84,47 @@ final class Api {
         }
         dispositivos.keySet().retainAll(mapa.keySet());
         escaneado = true;
+        try { prefs.edit().putString("dispositivos", listar().toString()).apply(); } catch (Exception ignorado) { /* sin guardar */ }
         return dispositivos.size();
+    }
+
+    /** Recrea los drivers de la ultima lista guardada, sin red. False si no hay lista. */
+    private synchronized boolean restaurar() {
+        if (!dispositivos.isEmpty()) return true;
+        try {
+            JSONArray a = new JSONArray(prefs.getString("dispositivos", "[]"));
+            for (int i = 0; i < a.length(); i++) {
+                Driver d = Driver.desdeFicha(a.getJSONObject(i));
+                if (d != null) dispositivos.put(d.id(), d);
+            }
+        } catch (Exception e) {
+            dispositivos.clear();
+        }
+        return !dispositivos.isEmpty();
+    }
+
+    private void escanearEnFondo() {
+        if (!enFondo.compareAndSet(false, true)) return;
+        Thread t = new Thread(() -> {
+            try { escanear(); } finally { enFondo.set(false); }
+        });
+        t.setDaemon(true);
+        t.start();
     }
 
     private synchronized Driver buscar(String id) { return dispositivos.get(id); }
 
-    private JSONArray fichas() throws Exception {
+    private Response fichas() throws Exception {
         boolean falta;
         synchronized (this) { falta = !escaneado; }
+        if (falta && restaurar()) {  // lista guardada: se muestra ya y el escaneo real sigue en segundo plano
+            escanearEnFondo();
+            Response r = json(listar());
+            r.escaneando = true;
+            return r;
+        }
         if (falta) escanear();
-        return listar();
+        return json(listar());
     }
 
     private synchronized JSONArray listar() throws Exception {
@@ -104,10 +148,13 @@ final class Api {
         try {
             if (metodo.equals("GET")) {
                 if (ruta.equals("/ping")) return texto(200, "ok");
-                if (ruta.equals("/devices")) return json(fichas());
+                if (ruta.equals("/devices")) return fichas();
             }
             if (metodo.equals("POST") && ruta.equals("/scan")) {
-                int n = escanear();
+                // ?esperar=1: solo esperar el escaneo de fondo (si ya termino, no se repite el barrido)
+                boolean listo;
+                synchronized (this) { listo = escaneado; }
+                int n = listo && consulta(query, "esperar").equals("1") ? listar().length() : escanear();
                 String red = Discovery.prefijoLocal();
                 return json(new JSONObject().put("dispositivos", n).put("red", red == null ? "sin WiFi" : red + "0/24"));
             }

@@ -116,11 +116,11 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
-    def responder(self, code, body=b"", ctype="text/plain; charset=utf-8"):
+    def responder(self, code, body=b"", ctype="text/plain; charset=utf-8", cache="no-store"):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", cache)
         self.end_headers()
         self.wfile.write(body)
 
@@ -163,7 +163,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json(d.estado())
             if metodo == "GET" and accion == "icon" and arg:
                 cuerpo, ctype = d.icon(arg)
-                return self.responder(200, cuerpo, ctype)
+                return self.responder(200, cuerpo, ctype, "max-age=86400")  # los iconos no cambian
             if metodo == "POST" and accion == "key" and arg:
                 modo = q.get("accion", [""])[0]  # start/end = mantener la tecla (pulsacion larga)
                 if modo:

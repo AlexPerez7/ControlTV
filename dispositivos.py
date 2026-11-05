@@ -96,6 +96,10 @@ class Roku(Driver):
     marca = "Roku"
     caps = ("keys", "text", "apps")
 
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self._iconos = {}  # app_id -> (cuerpo, content-type)
+
     @classmethod
     def probe(cls, ip):
         try:
@@ -133,7 +137,10 @@ class Roku(Driver):
         self._post("/launch/" + urllib.parse.quote(app_id, safe=""))
 
     def icon(self, app_id):
-        return _http(f"http://{self.ip}:8060/query/icon/{urllib.parse.quote(app_id, safe='')}")
+        # En memoria: el icono de una app no cambia, y abrir "Aplicaciones" bajaba ~300 KB del Roku cada vez
+        if app_id not in self._iconos:
+            self._iconos[app_id] = _http(f"http://{self.ip}:8060/query/icon/{urllib.parse.quote(app_id, safe='')}")
+        return self._iconos[app_id]
 
 
 # --- Hisense con Twonky/DLNA + DIAL (TN40.V0021.K221...) --------------------------
@@ -502,7 +509,8 @@ class AndroidTV(Driver):
         self._pair_desde = 0.0  # cuando se mostro el codigo en la TV (caduca a los 2 min)
         self._ime = (0, 0)  # contadores (ime, campo) de la ultima edicion de texto que informo la TV
         self._vol = None  # (nivel, maximo, silenciado) segun la ultima notificacion de la TV
-        self._fallo_hasta = 0.0  # tras fallar al conectar, las teclas fallan al instante hasta este momento
+        self._fallo_hasta = 0.0
+        self._ultimo_msg = 0.0  # cuando llego el ultimo mensaje de la TV por la conexion de control  # tras fallar al conectar, las teclas fallan al instante hasta este momento
 
     @property
     def caps(self):  # sin red: el estado lo fija preparar() al escanear
@@ -662,6 +670,10 @@ class AndroidTV(Driver):
 
     # -- control -------------------------------------------------------------
     def online(self):
+        # Conexion de control viva y la TV hablo hace poco (manda pings): responde sin tocar la red. Si la TV se apaga
+        # de golpe el socket puede seguir "abierto", por eso cuenta el ultimo mensaje y no solo que exista.
+        if self._sock is not None and self._listo.is_set() and time.time() - self._ultimo_msg < self.VIVA:
+            return True
         try:
             socket.create_connection((self.ip, self.PUERTO_REMOTE), timeout=1.5).close()
             return True
@@ -673,6 +685,7 @@ class AndroidTV(Driver):
             s.settimeout(None)
             while True:
                 m = _pb_leer(self._leer_msg(s))
+                self._ultimo_msg = time.time()
                 if 1 in m:  # la TV pide nuestra configuracion
                     dev = _pb((1, "Control TV"), (2, "Control TV"), (3, 1), (4, "1"), (5, "control.tv"), (6, "1.0.0"))
                     self._enviar(s, _pb((1, _pb((1, 622), (2, dev)))))
@@ -707,6 +720,7 @@ class AndroidTV(Driver):
 
     ESPERA_TECLADO = 0.4
     ESPERA_TRAS_FALLO = 3.0
+    VIVA = 12.0  # segundos sin mensajes de la TV tras los que online() vuelve a comprobar por red
 
     def _asegurar_conexion(self):
         with self._conn:

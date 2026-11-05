@@ -77,6 +77,20 @@ abstract class Driver {
         return o;
     }
 
+    /** Recrea un driver desde su ficha guardada (sin red), o null si la marca no se conoce. */
+    static Driver desdeFicha(JSONObject f) throws JSONException {
+        String ip = f.getString("ip"), modelo = f.optString("modelo"), nombre = f.optString("nombre");
+        switch (f.optString("marca")) {
+            case "Roku": return new Roku(ip, modelo, nombre);
+            case "Hisense": return new Hisense(ip, modelo, nombre);
+            case "Android TV":
+                AndroidTV t = new AndroidTV(ip, modelo, nombre);
+                t.restaurarPareado(f.optJSONArray("caps") != null && f.getJSONArray("caps").toString().contains("\"keys\""));
+                return t;
+            default: return null;
+        }
+    }
+
     /** Valida identificadores que acaban dentro de una URL del dispositivo. */
     static String seguro(String s) throws DriverError {
         if (s == null || !s.matches("[A-Za-z0-9_.-]{1,64}")) throw new DriverError("Identificador no valido");
