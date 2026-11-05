@@ -246,6 +246,7 @@ final class Api {
                     String om = d.omitidos(t);  // 200 con aviso: se escribio lo posible
                     return om.isEmpty() ? OK : texto(200, "Se omitieron: " + om);
                 }
+                if (accion.equals("search")) { d.search(consulta(query, "q")); return OK; }
                 if (accion.equals("launch") && arg != null) { d.launch(arg); return OK; }
                 if (accion.equals("pair") && arg != null) { d.pair(arg); return OK; }
                 if (accion.equals("fuente") && arg != null) { d.fuente(arg); return OK; }

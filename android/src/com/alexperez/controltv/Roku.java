@@ -141,6 +141,13 @@ final class Roku extends Driver {
         return s.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'");
     }
 
+    /** Busca por titulo: abre los resultados en la pantalla del Roku (sin reproducir nada). */
+    @Override void search(String q) throws Exception {
+        q = q.trim();
+        if (q.isEmpty()) throw new DriverError("Escribe qué buscar");
+        post("/search/browse?keyword=" + Net.pct(q));
+    }
+
     @Override void launch(String appId) throws Exception { post("/launch/" + Net.pct(seguro(appId))); }
 
     /** En memoria: el icono de una app no cambia, y abrir "Aplicaciones" bajaba ~300 KB del Roku cada vez. */

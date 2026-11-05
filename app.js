@@ -269,6 +269,17 @@ async function enviarTexto() {
     setEstado(aviso ? '✓ Texto enviado. ' + aviso : '✓ Texto enviado', !!aviso);
   } catch (e) { setEstado(msgError(e, 'Error al enviar texto'), true); }
 }
+// Roku: busca el título en todas sus apps (abre los resultados en la TV; no reproduce nada)
+document.getElementById('buscarTitulo').addEventListener('click', async () => {
+  const t = inp.value.trim(); if (!t) { setEstado('Escribe qué buscar', true); return; }
+  if (!actual) { setEstado('Elige un dispositivo', true); return; }
+  setEstado('Buscando en la TV...');
+  try {
+    const r = await fetch('/d/' + actual.id + '/search?q=' + encodeURIComponent(t), { method: 'POST' });
+    if (!r.ok) throw new Error(await r.text());
+    setEstado('✓ Resultados en la TV');
+  } catch (e) { setEstado(msgError(e, 'No se pudo buscar'), true); }
+});
 document.getElementById('enviar').addEventListener('click', enviarTexto);
 inp.addEventListener('keydown', e => { if (e.key === 'Enter') enviarTexto(); });
 

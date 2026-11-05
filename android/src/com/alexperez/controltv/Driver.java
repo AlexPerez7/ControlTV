@@ -34,6 +34,7 @@ abstract class Driver {
 
     boolean online() { return false; }
     void key(String k) throws Exception { throw new DriverError("Este dispositivo no admite teclas"); }
+    void search(String q) throws Exception { throw new DriverError("Este dispositivo no admite buscar contenido"); }
     void text(String t) throws Exception { throw new DriverError("Este dispositivo no admite texto"); }
     JSONArray apps() throws Exception { return new JSONArray(); }
     void launch(String appId) throws Exception { throw new DriverError("Este dispositivo no admite abrir apps"); }

@@ -11,7 +11,7 @@ y la interfaz muestra solo los botones que soporta. `servidor.ps1` es la version
 
 | Dispositivo | Driver | Funciona | Pendiente |
 |---|---|---|---|
-| Roku Express (192.168.31.110) | `Roku` (ECP :8060) | teclas, texto, apps, iconos; mando propio en la app; estado (inicio/salvapantallas/app y reproductor) | búsqueda de contenido |
+| Roku Express (192.168.31.110) | `Roku` (ECP :8060) | teclas, texto, apps, iconos; mando propio en la app; estado (inicio/salvapantallas/app y reproductor) | búsqueda de contenido por título |
 | Hisense TN40.V0021.K221.WAM, 40" (192.168.31.192) | `Hisense` | volumen +/- y mute, abrir YouTube/Netflix (DIAL) | teclas, encendido/apagado, fuente |
 | Caixun Android TV (192.168.31.108) | `AndroidTV` (Android TV Remote v2, :6466/:6467) | teclas, volumen, encendido, abrir apps (YouTube, Prime, Disney+, HBO Max probados); emparejado; Wake-on-LAN; iconos reales (app) | - |
 | onn E58D62UN Vestel (192.168.31.145) | `Vestel` (solo manual) | nada (ver abajo) | ver abajo |
@@ -121,7 +121,7 @@ Se extrajo y analizo con REA (`rea`, JADX) lo que hay en el movil; ningun protoc
       Alternativa más pesada: un APK que hable con el Roku.
 - [ ] **Código QR** en la ventana del servidor para abrir la web desde el celular sin escribir la dirección.
 - [ ] **Servidor siempre disponible:** arrancar con Windows, IP fija para el PC y el Roku. (Modifica el sistema: confirmar antes.)
-- [ ] **Búsqueda de contenido** por título entre apps (API de búsqueda del Roku). Probar con cuidado: cambia lo que se reproduce.
+- [x] **Búsqueda de contenido** por título entre apps (hecho: `POST /d/<id>/search?q=` → ECP `/search/browse?keyword=`; abre los resultados en la TV y NO reproduce; sin `launch=true` a propósito, para elegir tú. Botón "Buscar película o serie" bajo el cuadro de texto, solo Roku; Python y Java; 1 prueba).
 - [ ] Mantener la pantalla encendida mientras se usa el control, y mostrar la app activa (`/query/active-app`).
 - [ ] Probar en el celular la instalación en pantalla de inicio (con HTTP puede abrirse con la barra del navegador).
 

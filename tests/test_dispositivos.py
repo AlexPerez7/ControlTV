@@ -198,6 +198,16 @@ class RokuPruebas(unittest.TestCase):
         with self.assertRaises(d.DriverError):
             r.key_hold("Up", "otra")
 
+    def test_buscar_titulo_abre_resultados_sin_reproducir(self):
+        r = d.Roku("192.168.31.110")
+        with mock.patch.object(d, "_http") as h:
+            r.search("  El señor & los anillos ")
+        self.assertEqual(h.call_args.args[0],
+                         "http://192.168.31.110:8060/search/browse?keyword=El%20se%C3%B1or%20%26%20los%20anillos")
+        self.assertNotIn("launch", h.call_args.args[0])
+        with self.assertRaises(d.DriverError):
+            r.search("   ")
+
     def test_la_ficha_lista_las_teclas_que_se_mantienen(self):
         self.assertEqual(servidor.ficha("roku-x", d.Roku("192.168.31.110"))["largo"],
                          ["Up", "Down", "Left", "Right", "Rev", "Fwd"])

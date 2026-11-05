@@ -123,6 +123,9 @@ class Driver:
     def text(self, t: str):
         raise DriverError("Este dispositivo no admite texto")
 
+    def search(self, q: str):
+        raise DriverError("Este dispositivo no admite buscar contenido")
+
     def apps(self) -> list:  # [{"id","name","icon"(url relativa o None)}]
         return []
 
@@ -239,6 +242,13 @@ class Roku(Driver):
     def text(self, t):
         for ch in t:
             self._post("/keypress/Lit_" + urllib.parse.quote(ch, safe=""))
+
+    def search(self, q):
+        """Búsqueda de contenido por título: abre los resultados en la pantalla del Roku (sin reproducir nada; eliges tú)."""
+        q = q.strip()
+        if not q:
+            raise DriverError("Escribe qué buscar")
+        self._post("/search/browse?keyword=" + urllib.parse.quote(q, safe=""))
 
     @staticmethod
     def interpretar_estado(xml_app, xml_player=""):

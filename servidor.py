@@ -228,6 +228,11 @@ class Handler(BaseHTTPRequestHandler):
                 if omitidos:  # 200 con aviso: se escribio lo posible
                     return self.responder(200, f"Se omitieron: {omitidos}".encode())
                 return self.responder(204)
+            if metodo == "POST" and accion == "search":
+                t = q.get("q", [""])[0]
+                d.search(t)
+                print(f"  {d.nombre}: buscar {t!r}")
+                return self.responder(204)
             if metodo == "POST" and accion == "fuente" and arg:
                 d.fuente(arg)
                 print(f"  {d.nombre}: fuente {arg}")
