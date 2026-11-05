@@ -2,6 +2,18 @@
 
 Cada versión nueva debe tener aquí su sección `## X.Y` (el workflow de Release la usa como descripción y falla si falta).
 
+## 1.6
+
+### Novedades
+- **Rediseño de la web y la app:** estilo de mando físico (grafito, anillo de navegación con el OK como única luz) y la web separada en `index.html`, `estilos.css` y `app.js`.
+- **Mando propio para el Roku:** Atrás arriba a la izquierda, línea "Ahora" (inicio, salvapantallas o "YouTube · en pausa"), acento morado y el panel de apps abierto. Sin encendido ni volumen, que el Roku Express no tiene.
+- **Pulsación larga real en el Roku** (flechas, Retroceder y Avanzar) y **búsqueda de película o serie por título**: abre los resultados en la TV sin reproducir nada.
+- **Android TV (Caixun):** Encender con Wake-on-LAN (la MAC se detecta sola o se escribe en Ajustes), pulsación larga real, iconos reales de las apps y widget de pantalla de inicio (Vol −, Silencio, Vol +, Pausa).
+- **Dispositivos recordados:** una TV apagada del todo sigue en la lista (○) y los ids son estables aunque cambie la IP (se pierde una vez la TV elegida).
+
+### Interno
+- 69 pruebas sin red (`tests/test_protocolo.py`, `tests/test_dispositivos.py`).
+
 ## 1.5
 
 ### Novedades
