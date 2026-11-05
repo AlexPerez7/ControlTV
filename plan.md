@@ -29,9 +29,10 @@ y la interfaz muestra solo los botones que soporta. `servidor.ps1` es la version
 - `Menú` sin efecto sobre una app del inicio. `Ajustes` y los números sin probar. `https://play.max.com` es el enlace de HBO Max que citan en el [hilo de enlaces de HA](https://community.home-assistant.io/t/android-tv-remote-app-links-deep-linking-guide/567921?page=12).
 - Puertos 6466 (control) y 6467 (pairing), TLS con certificado de cliente + protobuf. La TV muestra un codigo hex de 6 caracteres;
   la clave del pairing es SHA-256(modulo+exponente del cliente, modulo+exponente de la TV, codigo sin su primer byte).
-- La identidad TLS del servidor es `androidtv_cert.pem`/`androidtv_clave.pem` (generada con openssl, ignorada por git). La app Android
-  usa la misma desde `~/tools/androidtv.p12` (`openssl pkcs12 -export ... -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1`),
-  asi lo emparejado desde el PC sirve en el celular. `build.sh` la copia a assets.
+- La identidad TLS del servidor es `androidtv_cert.pem`/`androidtv_clave.pem` (ignorada por git). Se crea sola con `certificado_autofirmado()`
+  en `dispositivos.py` (RSA 2048 + X.509 en Python puro; antes usaba `openssl`, que Windows no trae). **Ya no la comparte la app** (desde la 1.3
+  cada celular tiene su clave en el Android Keystore): lo emparejado desde el PC no sirve en el celular ni al revés. Si se borran los `.pem`
+  hay que volver a emparejar el servidor con la TV.
 - Abrir apps con enlaces `https://` genericos hace que Android pregunte "Abrir con" (Downloader tambien lo reclama).
   Usar esquemas propios: YouTube `vnd.youtube://` y Netflix `nflx://www.netflix.com` (probados, abren directo; YouTube con id de video tambien).
   Probado en la Caixun: Prime Video (`https://app.primevideo.com`) pregunto "Abrir con" y se resolvio marcando "Siempre"; Disney+ abrio directo;
@@ -146,7 +147,7 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
 ### Diseño del código
 - [ ] **B** · La lógica de los drivers está duplicada en Python y Java (teclas, enlaces de apps, protocolos). Pasar los datos
       (mapas de teclas, enlaces de apps) a un `drivers.json` común que `build.sh` copie a los assets, para cambiarlos en un solo sitio.
-- [ ] **B** · La app lleva dentro la clave privada de `androidtv.p12`: cualquiera con el APK podría usar el emparejamiento.
+- [x] **B** · (hecho en la 1.3: Android Keystore por celular) La app lleva dentro la clave privada de `androidtv.p12`: cualquiera con el APK podría usar el emparejamiento.
       Alternativa: generar la clave en el **Android Keystore** de cada celular (crea su propio certificado autofirmado) y
       emparejar una vez por celular. Así el APK no lleva secretos.
 - [x] **B** · (hecho: `tests/test_protocolo.py`, 11 pruebas; faltan Roku/Hisense) Pruebas mínimas sin dependencias (`python -m unittest`): codificar/decodificar protobuf, el hash del pairing con un
@@ -263,3 +264,14 @@ Lo que ya estaba arriba no se repite (salvo cuando cambia la prioridad). A = muc
   El servidor de Python sigue usando su propio `androidtv_cert.pem` (local, ignorado por git).
 - **Vibracion (v1.3, hecho)**: `tocar(tipo)` en `index.html` -> `App.tocar` (Vibrator nativo, EFFECT_CLICK/TICK/HEAVY_CLICK; permiso VIBRATE) y
   `navigator.vibrate` en el navegador. Clic al pulsar, tick al repetir/soltar, fuerte al activar la pulsacion larga.
+
+- **Segunda revisión (nov 2026), lo aprendido:**
+  - Medir antes de optimizar: conexión persistente al Roku no ganó nada (22 ms vs 21 ms en la LAN); los iconos (305 KB) sí valían la caché.
+  - `Hisense.online()` mira solo el puerto 9085: `GetVolume` da 401 hasta aceptar el permiso y la TV salía como desconectada.
+  - Hisense: silencio = volumen 0. Siempre se lee el volumen real antes de cambiarlo (el control físico de la TV también lo mueve).
+  - App: la lista de dispositivos se guarda (`SharedPreferences`, clave `dispositivos`) y se reconstruye con `Driver.desdeFicha()` sin red;
+    el estado de emparejamiento guardado puede ser viejo: si ya no vale, la primera tecla falla y el siguiente escaneo lo corrige.
+  - Android TV: tras fallar al conectar, las teclas siguientes fallan al instante 3 s (`ESPERA_TRAS_FALLO`) en vez de esperar un timeout cada una.
+    `online()` da `True` sin red solo si la TV mandó un mensaje en los últimos 12 s (`VIVA`).
+  - Depuración por USB: si adb queda en `unauthorized`, `adb kill-server` y aceptar otra vez el aviso en el celular; la pantalla se apaga
+    sola y las capturas salen negras (`adb shell input keyevent WAKEUP`).

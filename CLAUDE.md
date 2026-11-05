@@ -5,8 +5,9 @@ dispositivos (Roku, Hisense, ...) y sirve una web pensada para el celular. Idiom
 `plan.md` es la fuente de verdad del estado, lo descubierto y lo descartado; léelo antes de investigar algo de las TV.
 
 ## Cómo ejecutar
-- `python servidor.py [--puerto 8090]` (en Windows: `Iniciar Control TV.bat`). Detecta dispositivos por SSDP al arrancar;
-  el botón "Buscar" de la web vuelve a escanear. Abrir en el celular la URL que imprime (mismo WiFi).
+- `python servidor.py [--puerto 8090] [--ip 192.168.x.y]` (en Windows: `Iniciar Control TV.bat`). Detecta dispositivos por SSDP al arrancar;
+  el botón "Buscar" de la web vuelve a escanear (un solo barrido a la vez, /24 de la IP local; `--ip` si elige mal la red). Abrir en el celular
+  la URL que imprime (mismo WiFi). El certificado de Android TV (`androidtv_*.pem`) se crea solo, en Python, sin `openssl`.
 - Sin dependencias. Pruebas sin red ni TV (protobuf, DER, emparejamiento): `python -I -m unittest discover -s tests`.
   Además `python -I -m py_compile servidor.py dispositivos.py` y probar con `curl` contra otro puerto (`--puerto 8099`),
   p. ej. `curl localhost:8099/devices`. Para parar ese servidor: `pkill -f "[s]ervidor.py --puerto 8099"` (sin los corchetes se mata a sí mismo).
@@ -20,6 +21,9 @@ dispositivos (Roku, Hisense, ...) y sirve una web pensada para el celular. Idiom
 - `dispositivos.py`: un `Driver` por marca (`Roku`, `Hisense`, `Vestel`). Cada uno declara `caps` (`keys`, `text`,
   `apps`, `volume`) y la web solo muestra los botones que el dispositivo soporta. Las teclas usan nombres Roku ECP
   (`Up`, `Select`, `VolumeUp`, ...) como idioma común.
+- App Android (`android/`): el mismo `index.html` en un WebView y los mismos drivers en Java; `Api.java` replica las rutas de `servidor.py`.
+  Guarda la última lista de dispositivos (SharedPreferences) y la sirve con la cabecera `X-Escaneando` mientras reescanea; la web luego
+  espera con `POST /scan?esperar=1`. Cada celular genera su clave TLS en el Android Keystore (no hay claves en el APK).
 - `index.html`: una sola página; selector de dispositivo, secciones con clases `cap-keys|cap-text|cap-apps|cap-volume`.
 - Agregar una marca: subclase de `Driver` + registrarla en `DRIVERS`. Si no se autodetecta, `dispositivos.json`
   (`[{"ip":..., "marca":"vestel", "modelo":...}]`, ignorado por git). Varias TV de la misma marca funcionan sin cambios.
@@ -30,7 +34,8 @@ dispositivos (Roku, Hisense, ...) y sirve una web pensada para el celular. Idiom
   avisar al usuario, confirmar que la TV está encendida y restaurar el valor original (p. ej. volumen 2→3→2).
   Las lecturas (GetVolume, device-info, SSDP) son seguras.
 - La Hisense (192.168.31.192, TN40.V0021.K221.WAM) pide permiso en pantalla la primera vez: sin aceptarlo `SetVolume`
-  da 401. Su mute nativo no funciona; está emulado con el volumen. Teclas/encendido: sin canal conocido (ver `plan.md`).
+  da 401. Su mute nativo no funciona; está emulado con el volumen (0 = silenciado; se lee siempre el volumen real).
+  `online()` solo comprueba el puerto 9085: sin el permiso aceptado la TV sigue figurando conectada. Teclas/encendido: sin canal conocido (ver `plan.md`).
 - Subir a `main` solo cuando el usuario lo pida.
 
 ## Análisis de apps con REA
