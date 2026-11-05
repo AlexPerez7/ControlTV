@@ -44,7 +44,20 @@ function aplicarCaps() {
   if (caps.includes('volume')) refrescarVolumen();
   if (window.App) App.volumen(caps.includes('volume'));  // la app usa los botones de volumen del celular
   revisarCompartido();
+  mostrarMac();
 }
+// MAC para Wake-on-LAN (solo app): Android no deja leerla de la red, se escribe una vez.
+const macTv = document.getElementById('macTv');
+function mostrarMac() {
+  const ok = !!(window.App && App.mac && actual && actual.caps.includes('keys') && actual.marca === 'Android TV');
+  document.getElementById('bloqueMac').style.display = ok ? '' : 'none';
+  if (ok) macTv.value = App.mac(actual.id);
+}
+document.getElementById('macGuardar').addEventListener('click', () => {
+  if (!actual) { setEstado('Elige un dispositivo', true); return; }
+  if (App.guardarMac(actual.id, macTv.value)) { macTv.value = App.mac(actual.id); setEstado('✓ MAC guardada: Encender también la despierta por la red'); }
+  else setEstado('La MAC son 6 pares de letras y números, como aa:bb:cc:dd:ee:ff', true);
+});
 // ● en línea, ○ sin respuesta, nada mientras no se sabe (lo actualiza refrescarEnLinea)
 const enLineaDev = {};
 function etiqueta(d) {

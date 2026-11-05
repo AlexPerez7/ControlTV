@@ -883,12 +883,18 @@ class AndroidTV(Driver):
     def key(self, k):
         if k not in self.TECLAS:
             raise DriverError("Tecla no disponible en esta TV")
+        encender = k in ("Power", "PowerOn") and bool(self.mac)
+        if encender:
+            # Siempre se manda también el paquete mágico (la TV lo ignora si ya está despierta): con la red de la TV
+            # caída, o justo cuando está bajándola, la tecla sola no la enciende.
+            try:
+                self.wake()
+            except DriverError:
+                encender = False
         try:
             self._inyectar(k, self.CORTA)
         except DriverError:
-            # Encender con la TV apagada del todo (sin red): se intenta Wake-on-LAN si se conoce su MAC
-            if k in ("Power", "PowerOn") and self.mac:
-                self.wake()
+            if encender:  # sin red: el paquete ya salió; se espera a que vuelva y se manda la tecla
                 self._tras_wake(k)
                 return
             raise

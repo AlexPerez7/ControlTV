@@ -49,9 +49,9 @@ y la interfaz muestra solo los botones que soporta. `servidor.ps1` es la version
 - **Wake-on-LAN (probado):** la Caixun en reposo normal sigue en la red (puertos 6466/8008/5555 abiertos, responde al ping); tras unos minutos baja la red del todo.
   Con la red caída, el paquete mágico (broadcast, puertos 9 y 7) la **despierta la red ~30 s pero la pantalla sigue apagada y vuelve a dormir sola**. Por eso `AndroidTV.key("Power"/"PowerOn")`,
   si falla, manda el paquete y **espera a que abra el 6466 (hasta 20 s) y entonces manda la tecla** (`_tras_wake`/`trasWake`): así se enciende la pantalla (~9 s en total).
-  Con la TV en reposo con red, `PowerOn` (224) una vez devolvió 204 sin encenderla (justo cuando bajaba la red): idea pendiente, mandar también el paquete en cada `Encender`.
+  Con la TV en reposo con red, `PowerOn` (224) una vez devolvió 204 sin encenderla (justo cuando bajaba la red): por eso **ahora se manda el paquete en cada `Encender`/`Power` si se conoce la MAC** (la TV lo ignora si ya está despierta), antes de la tecla.
 - **MAC:** `eureka_info` da `mac_address` 00:00:00:00:00:00 en la Caixun (no sirve). El servidor la saca de la tabla ARP (`mac_de_ip`, Linux y Windows) o de `"mac"` en `dispositivos.json`.
-  **La app Android no puede leer la tabla ARP (Android 10+)**: allí la MAC queda vacía y el Wake-on-LAN no actúa; haría falta un campo manual de MAC en Ajustes (sin hacer).
+  **La app Android no puede leer la tabla ARP (Android 10+)**: allí la MAC se escribe a mano en *Ajustes y actualización › MAC de la TV* (solo Android TV; se guarda en las preferencias, `App.mac`/`App.guardarMac`, y no se pierde al reescanear ni si la TV cambia de IP). Probado en el Samsung: se guarda y sobrevive a cerrar la app.
 - **Dispositivos recordados:** `conocidos.json` (ignorado por git) en el servidor y las preferencias en la app guardan los dispositivos con id estable; si no contestan siguen en la lista con ○ para poder encenderlos.
   Si una TV se retira hay que borrar su entrada (o el archivo).
 - **Iconos de apps (solo app):** el protocolo no los da; se leen del `PackageManager` del celular (`<queries>` en el manifiesto) para YouTube, Netflix, Prime Video, Disney+, HBO Max (`com.wbd.stream`) y Spotify. Sin la app instalada, la web usa su logo propio. El servidor del PC no los tiene.

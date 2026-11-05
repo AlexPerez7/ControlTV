@@ -89,6 +89,7 @@ summary { display:flex; align-items:center; gap:10px; }
 summary .ic { color:var(--muted); }
 
 .row:has(#instalarAct[style*="none"]) #buscarAct { grid-column:1 / -1; }  /* sin "Actualizar" visible, ocupa toda la fila */
+#bloqueMac { margin-top:6px; }
 .compurl { font-size:13px; color:var(--muted); word-break:break-all; margin:0 0 10px; text-align:center; }
 .ic { width:24px; height:24px; flex:none; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
 .pad .ic { width:34px; height:34px; stroke-width:2.6; }

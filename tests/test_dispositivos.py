@@ -106,6 +106,14 @@ class EncenderSinRed(unittest.TestCase):
             tv._tras_wake("PowerOn")
         tv._inyectar.assert_not_called()
 
+    def test_encender_manda_el_paquete_aunque_la_tecla_funcione(self):
+        tv = self._tv("2a:c4:b5:ad:6e:0f")
+        tv._inyectar = mock.Mock()  # la TV responde
+        with mock.patch.object(d, "wake_on_lan") as w:
+            tv.key("PowerOn")
+        w.assert_called_once_with("2a:c4:b5:ad:6e:0f", "192.168.31.108")
+        tv._inyectar.assert_called_once()
+
     def test_otras_teclas_siguen_fallando(self):
         tv = self._tv("2a:c4:b5:ad:6e:0f")
         with mock.patch.object(d, "wake_on_lan") as w, self.assertRaises(d.DriverError):

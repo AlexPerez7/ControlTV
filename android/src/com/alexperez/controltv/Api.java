@@ -109,7 +109,9 @@ final class Api {
 
     /** Conserva la instancia ya conocida (su estado: volumen, conexion) salvo que la IP haya cambiado. */
     private static Driver elegir(Driver previo, Driver nuevo) {
-        if (previo == null || !previo.ip.equals(nuevo.ip)) return nuevo;
+        if (previo == null) return nuevo;
+        if (nuevo.mac.isEmpty()) nuevo.mac = previo.mac;  // la MAC escrita a mano no se pierde (Android no puede leerla)
+        if (!previo.ip.equals(nuevo.ip)) return nuevo;
         if (!nuevo.mac.isEmpty()) previo.mac = nuevo.mac;
         return previo;
     }
@@ -123,8 +125,28 @@ final class Api {
         dispositivos.clear();
         dispositivos.putAll(res);
         escaneado = true;
-        try { prefs.edit().putString("dispositivos", listar().toString()).apply(); } catch (Exception ignorado) { /* sin guardar */ }
+        persistir();
         return dispositivos.size();
+    }
+
+    private synchronized void persistir() {
+        try { prefs.edit().putString("dispositivos", listar().toString()).apply(); } catch (Exception ignorado) { /* sin guardar */ }
+    }
+
+    /** MAC guardada de la TV ("" si no se conoce): la usa el Wake-on-LAN. */
+    synchronized String mac(String id) {
+        Driver d = dispositivos.get(id);
+        return d == null ? "" : d.mac;
+    }
+
+    /** Guarda la MAC que escribio el usuario (Android 10+ no deja leerla de la red). false si no es una MAC valida. */
+    synchronized boolean guardarMac(String id, String texto) {
+        Driver d = dispositivos.get(id);
+        String m = Net.normalizarMac(texto);
+        if (d == null || m.isEmpty()) return false;
+        d.mac = m;
+        persistir();
+        return true;
     }
 
     /** Recrea los drivers de la ultima lista guardada, sin red. False si no hay lista. */

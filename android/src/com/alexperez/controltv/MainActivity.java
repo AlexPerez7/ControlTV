@@ -221,6 +221,13 @@ public class MainActivity extends Activity {
         @android.webkit.JavascriptInterface
         public void volumen(boolean si) { tvConVolumen = si; }
 
+        /** MAC de la TV para el Wake-on-LAN (la app no puede leerla de la red). */
+        @android.webkit.JavascriptInterface
+        public String mac(String id) { return api.mac(id); }
+
+        @android.webkit.JavascriptInterface
+        public boolean guardarMac(String id, String mac) { return api.guardarMac(id, mac); }
+
         /** La TV elegida en la web: el widget manda sus teclas a esa. */
         @android.webkit.JavascriptInterface
         public void elegido(String id) { api.elegido(id); }

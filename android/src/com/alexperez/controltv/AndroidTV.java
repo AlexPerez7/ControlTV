@@ -528,11 +528,16 @@ final class AndroidTV extends Driver {
 
     @Override void key(String k) throws Exception {
         if (!TECLAS.containsKey(k)) throw new DriverError("Tecla no disponible en esta TV");
+        boolean encender = (k.equals("Power") || k.equals("PowerOn")) && !mac.isEmpty();
+        if (encender) {
+            // Siempre se manda tambien el paquete magico (la TV lo ignora si ya esta despierta): con la red de la TV
+            // caida, o justo cuando la esta bajando, la tecla sola no la enciende.
+            try { wake(); } catch (Exception e) { encender = false; }
+        }
         try {
             inyectar(k, CORTA);
         } catch (DriverError e) {
-            // Encender con la TV apagada del todo (sin red): Wake-on-LAN si se conoce su MAC
-            if ((k.equals("Power") || k.equals("PowerOn")) && !mac.isEmpty()) { wake(); trasWake(k); return; }
+            if (encender) { trasWake(k); return; }  // sin red: el paquete ya salio; se espera y se manda la tecla
             throw e;
         }
     }
