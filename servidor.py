@@ -6,6 +6,7 @@ crea dispositivos.json:  [{"ip": "192.168.31.145", "marca": "vestel", "modelo": 
 Solo usa la biblioteca estandar de Python.
 """
 import argparse
+import ipaddress
 import json
 import re
 import socket
@@ -22,6 +23,7 @@ BASE = Path(__file__).resolve().parent
 CFG = BASE / "dispositivos.json"
 DEVICES: dict = {}  # id -> Driver
 LOCK = threading.Lock()
+ESCANEO = threading.Lock()  # un solo barrido a la vez: si llega otro "Buscar", espera y usa ese resultado
 IP_LOCAL = "127.0.0.1"
 
 MANIFEST = ('{"name":"Control TV","short_name":"Control TV","start_url":"/","display":"standalone",'
@@ -50,8 +52,18 @@ def id_de(d) -> str:
 def manuales() -> list:
     if not CFG.exists():
         return []
+    try:
+        entradas = json.loads(CFG.read_text(encoding="utf-8"))
+        if not isinstance(entradas, list):
+            raise ValueError("debe ser una lista [ {...}, ... ]")
+    except (OSError, ValueError) as e:  # JSONDecodeError es ValueError
+        print(f"  dispositivos.json no se pudo leer, se ignora: {e}")
+        return []
     res = []
-    for e in json.loads(CFG.read_text(encoding="utf-8")):
+    for e in entradas:
+        if not isinstance(e, dict):
+            print(f"  dispositivos.json: entrada ignorada {e!r}")
+            continue
         clase = DRIVERS.get(str(e.get("marca", "")).lower())
         if clase and e.get("ip"):
             res.append(clase(e["ip"], e.get("modelo", ""), e.get("nombre", "")))
@@ -61,6 +73,18 @@ def manuales() -> list:
 
 
 def escanear() -> int:
+    if not ESCANEO.acquire(blocking=False):
+        with ESCANEO:  # ya hay uno en curso: esperar a que termine
+            pass
+        with LOCK:
+            return len(DEVICES)
+    try:
+        return _escanear()
+    finally:
+        ESCANEO.release()
+
+
+def _escanear() -> int:
     nuevos = {id_de(d): d for d in dispositivos.descubrir(IP_LOCAL)}
     nuevos.update({id_de(d): d for d in manuales()})
     with LOCK:
@@ -120,7 +144,7 @@ class Handler(BaseHTTPRequestHandler):
                 with LOCK:
                     return self.json([ficha(k, d) for k, d in DEVICES.items()])
         if metodo == "POST" and p == "/scan":
-            return self.json({"dispositivos": escanear()})
+            return self.json({"dispositivos": escanear(), "red": IP_LOCAL.rsplit(".", 1)[0] + ".0/24"})
 
         m = re.fullmatch(r"/d/([a-z0-9-]+)/(\w+)(?:/([\w.-]+))?", p)
         if not m:
@@ -188,9 +212,17 @@ def main():
     global IP_LOCAL
     ap = argparse.ArgumentParser()
     ap.add_argument("--puerto", type=int, default=8090)
+    ap.add_argument("--ip", help="IP de este PC en la red de las TV (si tiene VPN o varias redes y elige mal)")
     a = ap.parse_args()
 
-    IP_LOCAL = ip_local()
+    IP_LOCAL = a.ip or ip_local()
+    try:
+        ip = ipaddress.IPv4Address(IP_LOCAL)
+    except ValueError:
+        ap.error(f"--ip no valida: {IP_LOCAL}")
+    if not ip.is_private or ip.is_loopback:
+        print(f"  Aviso: {IP_LOCAL} no parece una IP de red local (¿VPN?). Si no encuentra las TV, usa --ip 192.168.x.y")
+    print(f"Red: {IP_LOCAL.rsplit('.', 1)[0]}.0/24 (se revisan solo esas 254 direcciones)")
     print("Buscando dispositivos en la red...")
     escanear()
     if not DEVICES:

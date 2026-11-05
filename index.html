@@ -205,6 +205,9 @@
 <script>
 const estado = document.getElementById('estado');
 function setEstado(t, err) { estado.textContent = t; estado.className = 'estado' + (err ? ' err' : ''); }
+// Mensaje para el usuario: el texto que manda el servidor/driver, o `porDefecto` si fallo la red
+// (fetch lanza TypeError "Failed to fetch", en ingles) o el error no trae texto.
+function msgError(e, porDefecto) { return e instanceof TypeError || !(e && e.message) ? porDefecto : e.message; }
 
 // Indicador de conexion con el servidor (mismo WiFi + PC encendido).
 const conn = document.getElementById('conn');
@@ -315,16 +318,25 @@ async function key(k) {
     if (!r.ok) throw new Error(await r.text());
     setEstado('✓ ' + k);
     if (k.startsWith('Volume')) setTimeout(refrescarVolumen, 250);  // la TV avisa el nuevo nivel un instante despues
-  } catch (e) { setEstado(e.message || ('Sin conexión con ' + actual.nombre), true); }
+  } catch (e) { setEstado(msgError(e, 'Sin conexión con ' + actual.nombre), true); }
+}
+
+// Botones de volumen del celular (los llama la app). Al mantenerlos, Android repite la tecla cada ~50 ms:
+// como en los botones de la web, no se manda otra hasta que vuelva la anterior, y a lo sumo una cada 150 ms.
+let fisicaEnCurso = false, ultimaFisica = 0;
+function teclaFisica(k) {
+  if (fisicaEnCurso || Date.now() - ultimaFisica < 150) return;
+  fisicaEnCurso = true; ultimaFisica = Date.now();
+  key(k).finally(() => { fisicaEnCurso = false; });
 }
 
 async function fuente(n) {
-  if (!actual) return;
+  if (!actual) { setEstado('Elige un dispositivo', true); return; }
   try {
     const r = await fetch('/d/' + actual.id + '/fuente/' + encodeURIComponent(n), { method: 'POST' });
     if (!r.ok) throw new Error(await r.text());
     setEstado('✓ ' + n);
-  } catch (e) { setEstado(e.message || ('Sin conexión con ' + actual.nombre), true); }
+  } catch (e) { setEstado(msgError(e, 'Sin conexión con ' + actual.nombre), true); }
 }
 
 // Pulsación larga real (dispositivos con `largo`, hoy Android TV): al pasar 450 ms se manda "start" y al soltar "end",
@@ -334,7 +346,7 @@ let holdActivo = null;  // función que suelta la tecla mantenida ahora
 function mantener(k, accion) {
   return fetch('/d/' + actual.id + '/key/' + k + '?accion=' + accion, { method: 'POST', keepalive: true })
     .then(async r => { if (!r.ok) throw new Error(await r.text()); })
-    .catch(e => setEstado(e.message || 'Error al mantener la tecla', true));
+    .catch(e => setEstado(msgError(e, 'Error al mantener la tecla'), true));
 }
 ['visibilitychange', 'blur'].forEach(ev => window.addEventListener(ev, () => { if (holdActivo) holdActivo(); }));
 
@@ -374,6 +386,7 @@ document.querySelectorAll('[data-k]').forEach(b => {
 const inp = document.getElementById('texto');
 async function enviarTexto() {
   const t = inp.value; if (!t) return;
+  if (!actual) { setEstado('Elige un dispositivo', true); return; }
   setEstado('Enviando texto...');
   try {
     const r = await fetch('/d/' + actual.id + '/text?t=' + encodeURIComponent(t), { method: 'POST' });
@@ -381,7 +394,7 @@ async function enviarTexto() {
     inp.value = '';
     const aviso = r.status === 200 ? await r.text() : '';  // 200 = se escribió, pero se omitieron caracteres
     setEstado(aviso ? '✓ Texto enviado. ' + aviso : '✓ Texto enviado', !!aviso);
-  } catch (e) { setEstado(e.message || 'Error al enviar texto', true); }
+  } catch (e) { setEstado(msgError(e, 'Error al enviar texto'), true); }
 }
 document.getElementById('enviar').addEventListener('click', enviarTexto);
 inp.addEventListener('keydown', e => { if (e.key === 'Enter') enviarTexto(); });
@@ -404,15 +417,17 @@ document.getElementById('compEnviar').addEventListener('click', async () => {
     const r = await fetch('/d/' + actual.id + '/open?u=' + encodeURIComponent(url), { method: 'POST' });
     if (!r.ok) throw new Error(await r.text());
     App.limpiarCompartido(); revisarCompartido(); setEstado('✓ Enviado a ' + actual.nombre);
-  } catch (e) { setEstado(e.message || 'No se pudo enviar', true); }
+  } catch (e) { setEstado(msgError(e, 'No se pudo enviar'), true); }
 });
 document.getElementById('compCancel').addEventListener('click', () => { App.limpiarCompartido(); revisarCompartido(); });
 
 async function pairar(arg, ok) {
-  if (!actual) return;
-  const r = await fetch('/d/' + actual.id + '/pair/' + arg, { method: 'POST' });
-  if (!r.ok) { setEstado(await r.text(), true); return false; }
-  setEstado(ok); return true;
+  if (!actual) { setEstado('Elige un dispositivo', true); return false; }
+  try {
+    const r = await fetch('/d/' + actual.id + '/pair/' + arg, { method: 'POST' });
+    if (!r.ok) throw new Error(await r.text());
+    setEstado(ok); return true;
+  } catch (e) { setEstado(msgError(e, 'Sin conexión con ' + actual.nombre), true); return false; }
 }
 const pairCod = document.getElementById('pairCod');
 document.getElementById('pairIni').addEventListener('click', async () => {
@@ -471,8 +486,11 @@ document.getElementById('detApps').addEventListener('toggle', async e => {
         } else { b.textContent = a.name; b.style.fontSize = '14px'; b.style.fontWeight = '600'; }
       }
       b.addEventListener('click', async () => {
-        const r = await fetch('/d/' + id + '/launch/' + encodeURIComponent(a.id), { method: 'POST' });
-        setEstado(r.ok ? 'Abriendo ' + a.name : await r.text(), !r.ok);
+        try {
+          const r = await fetch('/d/' + id + '/launch/' + encodeURIComponent(a.id), { method: 'POST' });
+          if (!r.ok) throw new Error(await r.text());
+          setEstado('Abriendo ' + a.name);
+        } catch (e) { setEstado(msgError(e, 'No se pudo abrir ' + a.name), true); }
       });
       cont.appendChild(b);
     });

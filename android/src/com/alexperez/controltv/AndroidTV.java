@@ -65,8 +65,13 @@ final class AndroidTV extends Driver {
     }
 
     private volatile boolean pareado;         // lo fija preparar() al escanear y el emparejamiento
-    private SSLSocket sock;
+    private volatile SSLSocket sock;
     private volatile boolean listo;
+    /** Protege la conexion (sock/listo). Separado del lock del objeto: estado() y el emparejamiento no frenan las teclas. */
+    private final Object conn = new Object();
+    /** Si conectar acaba de fallar, las teclas siguientes fallan al instante en vez de esperar otro timeout cada una. */
+    private volatile long falloHasta;
+    private static final long ESPERA_TRAS_FALLO_MS = 3000;
     private final Object envio = new Object();
     private SSLSocket pairSock;
     private long pairDesde;                   // cuando se mostro el codigo en la TV (caduca a los 2 min)
@@ -386,20 +391,34 @@ final class AndroidTV extends Driver {
         } catch (Exception fin) {
             // conexion cerrada: se reconecta en el siguiente envio
         } finally {
-            listo = false;
             cerrar(s);
-            synchronized (AndroidTV.this) { if (sock == s) sock = null; }
+            synchronized (conn) {
+                if (sock == s) { sock = null; listo = false; }  // una conexion vieja no apaga la senal de una nueva
+            }
         }
     }
 
     private SSLSocket asegurarConexion() throws Exception {
-        if (sock != null && listo) return sock;
+        synchronized (conn) {
+            SSLSocket actual = sock;
+            if (actual != null && listo) return actual;
+            if (System.currentTimeMillis() < falloHasta) throw new DriverError(nombre + " no responde (¿está encendida?)");
+            try {
+                return conectarControl();
+            } catch (DriverError e) {
+                falloHasta = System.currentTimeMillis() + ESPERA_TRAS_FALLO_MS;
+                throw e;
+            }
+        }
+    }
+
+    private SSLSocket conectarControl() throws Exception {
         listo = false;
         final SSLSocket s;
         try {
             s = conectar(PROBE_PORT, 5000);
         } catch (java.io.IOException e) {
-            throw new DriverError(nombre + " no responde (¿esta encendida?)");
+            throw new DriverError(nombre + " no responde (¿está encendida?)");
         }
         sock = s;
         Thread t = new Thread(new Runnable() { @Override public void run() { lector(s); } });
@@ -410,21 +429,23 @@ final class AndroidTV extends Driver {
             sock = null;
             cerrar(s);
             pareado = false;
-            throw new DriverError("La TV no acepto la conexion: vuelve a emparejarla");
+            throw new DriverError("La TV no aceptó la conexión: vuelve a emparejarla");
         }
         Thread.sleep(400);  // la TV crea un control virtual por conexion; una tecla enviada antes se pierde
         return s;
     }
 
-    private synchronized void mandar(byte[] datos) throws Exception {
+    private void mandar(byte[] datos) throws Exception {
         for (int intento = 0; intento < 2; intento++) {
             SSLSocket s = asegurarConexion();
             try {
                 enviar(s, datos);
                 return;
             } catch (java.io.IOException e) {
-                sock = null;
-                listo = false;
+                synchronized (conn) {
+                    if (sock == s) { sock = null; listo = false; }  // una conexion vieja no apaga una nueva
+                }
+                cerrar(s);
                 if (intento == 1) throw new DriverError(nombre + " no responde");
             }
         }
@@ -530,7 +551,7 @@ final class AndroidTV extends Driver {
         }
     }
 
-    @Override synchronized JSONObject estado() throws Exception {
+    @Override JSONObject estado() throws Exception {  // sin lock: la espera del volumen no frena las teclas
         asegurarConexion();
         for (int i = 0; i < 20 && volNivel < 0; i++) Thread.sleep(50);  // la TV manda el volumen justo despues de conectar
         if (volNivel < 0) return new JSONObject();

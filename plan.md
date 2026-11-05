@@ -190,6 +190,61 @@ Lo que ya estaba en "Mejoras generales" (IR, QR, arranque con Windows, búsqueda
 - [ ] **C** · Atajos: secuencias guardadas (p. ej. "Noche": abrir YouTube y bajar el volumen) y acciones a todas las TV a la vez
       (silenciar todo).
 
+## Mejoras propuestas, segunda revisión (nov 2026)
+
+Lo que ya estaba arriba no se repite (salvo cuando cambia la prioridad). A = mucho impacto y poco trabajo, B = conviene, C = a futuro.
+
+### 1. Errores y robustez
+- [x] **A** · (hecho y probado: el servidor arranca con un JSON a medio escribir, una lista mal formada o entradas sueltas) `dispositivos.json` con un error de sintaxis impide arrancar el servidor (y "Buscar" corta la conexión sin mensaje): capturar `JSONDecodeError`, avisar y seguir.
+- [x] **A** · (hecho: `certificado_autofirmado()` en Python puro, ~4 s una sola vez; `openssl verify` lo acepta y la Caixun completa el TLS con él. Los `.pem` existentes no se tocan) El servidor del PC no puede emparejar Android TV en Windows: `_asegurar_cert` necesita el programa `openssl`, que Windows no trae.
+      Generar la clave RSA y el certificado autofirmado en Python puro (Miller-Rabin + DER + firma con `pow`).
+- [x] **A** · (hecho y probado en la Caixun: 10 pulsaciones casi simultáneas suben 1, pulsaciones separadas >=150 ms pasan todas; `teclaFisica()` en index.html y `onKeyUp` no cambia el volumen del celular) App: mantener el volumen físico del celular manda un `key()` por cada repetición del sistema, sin freno (se acumulan). Usar el mismo freno que los botones de la web.
+- [x] **B** · (hecho, Python y Java: solo el puerto 9085; sin probar con la TV, estaba apagada) Hisense: `online()` hace `GetVolume`; sin el permiso aceptado da 401 y la TV sale como desconectada (○) aunque esté encendida. Comprobar solo el puerto.
+- [x] **B** · (hecho: `online()` sin `synchronized`) Java: `Hisense.online()` es `synchronized` como `key()`: el sondeo de cada 10 s puede frenar el volumen hasta 4 s.
+- [x] **B** · (hecho: lock `conn` propio, `estado()` sin lock; y en Java y Python, tras fallar al conectar las teclas fallan al instante durante 3 s: probado 3,1 s la primera y 0 s las siguientes) Java: `AndroidTV.mandar()` y `estado()` comparten lock y `asegurarConexion()` puede tardar hasta ~11 s con la TV apagada: todo se bloquea.
+- [x] **B** · (hecho: `msgError()` evita "Failed to fetch" en inglés) Web: `pairar()` y el clic en apps no capturan errores de red; `enviarTexto()` sin dispositivo muestra "Cannot read properties of null".
+- [x] **B** · (hecho, Python y Java, 4 pruebas con SOAP simulado; sin probar con la TV) Hisense: el mute emulado vive solo en memoria; si se reinicia el servidor o se usa el control físico queda mal. Volumen 0 = silenciado; releer antes de restaurar.
+- [x] **C** · (hecho y probado: dos `POST /scan` simultáneos tardan 3,5 s cada uno, no 7; en la app, dos toques en Buscar) Dos escaneos a la vez (inicial + "Buscar") hacen dos barridos completos: reutilizar el que está en curso.
+- [x] **C** · (hecho: `--ip`, aviso si no es IP privada y muestra la red que revisa; el barrido sigue siendo /24) Con VPN o varias interfaces, `ip_local()` puede elegir la red equivocada, y el barrido supone /24: opción `--ip`/`--red`.
+
+### 2. Rendimiento
+- [ ] **A** · Iconos de Roku con `Cache-Control: no-store` (y la app con `LOAD_NO_CACHE`): se bajan de la TV cada vez. `max-age` en `/icon/`.
+- [ ] **A** · (antes C) La app hace un barrido completo al abrirse antes de mostrar nada: guardar el último listado y mostrarlo al instante; reescanear en segundo plano.
+- [ ] **B** · `AndroidTV.online()` abre una conexión TCP al 6466 cada 10 s aunque haya un socket TLS vivo: si está listo, `True` sin red.
+- [ ] **B** · `onNewIntent` recarga toda la página al compartir: basta `evaluateJavascript("revisarCompartido()")`.
+- [ ] **C** · `_leer_msg` lee la longitud con `recv(1)` byte a byte: usar `makefile('rb')`.
+- [ ] **C** · En la app, el sondeo `/ping` cada 4 s no aporta (la API es local): desactivarlo si existe `window.App`.
+
+### 3. Funciones nuevas
+- [ ] **A** · Roku TV: leer `is-tv`/`supports-*` de `device-info` para declarar volumen, encendido y fuentes (`InputHDMI1`...).
+- [ ] **A** · Hisense: control deslizante de volumen (`SetVolume` es absoluto).
+- [ ] **B** · Búsqueda por voz junto al campo de texto (`RecognizerIntent` en la app, Web Speech API en el navegador).
+- [ ] **B** · Escritura en vivo (cada letra al escribirla, como Google TV) y botón "Pegar".
+- [ ] **B** · Temporizador de apagado (30/60/90 min).
+- [ ] **B** · Atajos de teclado en el navegador del PC (flechas, Enter, Retroceso, espacio, +/-).
+
+### 4. Diseño y comodidad
+- [ ] **A** · El estado muestra el nombre técnico de la tecla ("✓ Up", "✓ VolumeDown"): traducir o no mostrarlo en la navegación.
+- [ ] **A** · Mensajes de error de los drivers sin tildes ("Codigo incorrecto", "¿esta encendida?"): corregir los textos visibles.
+- [ ] **A** · `aria-live="polite"` en `#estado` para TalkBack.
+- [ ] **B** · Recordar los paneles abiertos (Más botones, Fuente, Apps) en `localStorage`.
+- [ ] **B** · Redundancia de encendido (⏻ + Apagar + Encender) y "Repetir" casi sin uso: moverlos a "Más botones".
+- [ ] **B** · Volumen como balancín vertical al costado del pad.
+- [ ] **B** · Con 2-4 dispositivos, pestañas/chips en vez del `<select>`; deslizar para cambiar de TV.
+- [ ] **B** · Apps ordenadas por uso o favoritas.
+- [ ] **B** · Contraste: textos de 12 px con `opacity:.5-.6` quedan bajo WCAG AA.
+- [ ] **C** · El botón Atrás del celular cierra primero un panel abierto.
+
+### 5. Seguridad
+- [ ] **B** · (antes C) CSRF: cualquier página web abierta en la red puede mandar comandos, y `/open` abre cualquier URL en la TV. Comprobar `Origin`/`Host`; PIN opcional.
+- [ ] **C** · Contraseña del keystore fija (`controltv`) en `build.sh`: en CI tomarla de un secreto.
+
+### 6. Código, pruebas y mantenimiento
+- [ ] **A** · CI en cada push/PR (pruebas Python + `py_compile` + `javac`), no solo al etiquetar.
+- [ ] **B** · Pruebas de las rutas HTTP con un driver falso y del parseo de Roku/Hisense con XML de ejemplo.
+- [ ] **C** · Fijar versiones de build-tools y plataforma en CI (builds reproducibles).
+- [ ] **C** · Mover los `[x]` de `plan.md` a una sección "Historial".
+
 ## Cómo se usa
 
 1. Ejecutar `Iniciar Control TV.bat` (detecta los dispositivos de la red al arrancar; el boton "Buscar" de la web vuelve a escanear).

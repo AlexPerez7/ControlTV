@@ -18,8 +18,9 @@ final class Hisense extends Driver {
     private static final String[] APPS_DIAL = {"YouTube", "Netflix"};
     private static final String NS = "urn:schemas-upnp-org:service:RenderingControl:1";
 
-    private int vol = -1;            // ultimo volumen conocido
-    private int antesMute = -1;      // volumen previo al mute emulado (-1 = sin mute)
+    private int antesMute = -1;      // volumen previo al mute emulado (-1 = desconocido)
+    /** Al quitar el silencio sin saber el volumen anterior (p. ej. tras reiniciar la app). */
+    private static final int VOL_SIN_MUTE = 10;
 
     Hisense(String ip, String modelo, String nombre) { super(ip, modelo, nombre); }
 
@@ -53,40 +54,48 @@ final class Hisense extends Driver {
         }
     }
 
-    @Override synchronized boolean online() {
-        try { getVolume(); return true; } catch (Exception e) { return false; }
+    /** Solo el puerto: GetVolume da 401 hasta aceptar el permiso en la TV, y no esta "desconectada". Sin lock: no frena el volumen. */
+    @Override boolean online() {
+        try (java.net.Socket s = new java.net.Socket()) {
+            s.connect(new java.net.InetSocketAddress(ip, 9085), 1500);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private int getVolume() throws Exception {
         Matcher m = Pattern.compile("<CurrentVolume>(\\d+)").matcher(soap("GetVolume", ""));
         if (!m.find()) throw new DriverError("La TV no informo el volumen");
-        vol = Integer.parseInt(m.group(1));
-        return vol;
+        return Integer.parseInt(m.group(1));
     }
 
     private void setVolume(int v) throws Exception {
         v = Math.max(0, Math.min(100, v));
         soap("SetVolume", "<DesiredVolume>" + v + "</DesiredVolume>");
-        vol = v;
     }
 
+    /** Siempre se lee el volumen actual: el control fisico de la TV tambien lo cambia. Volumen 0 = silenciado. */
     @Override synchronized void key(String k) throws Exception {
         if (k.equals("VolumeMute")) {
-            if (antesMute < 0) { antesMute = getVolume(); setVolume(0); }
-            else { int v = antesMute; antesMute = -1; setVolume(v); }
+            int v = getVolume();
+            if (v == 0) { setVolume(antesMute > 0 ? antesMute : VOL_SIN_MUTE); antesMute = -1; }
+            else { antesMute = v; setVolume(0); }
             return;
         }
         if (k.equals("VolumeUp") || k.equals("VolumeDown")) {
-            if (antesMute >= 0) { vol = antesMute; antesMute = -1; }  // subir/bajar cancela el mute emulado
-            int base = vol >= 0 ? vol : getVolume();
-            setVolume(base + (k.equals("VolumeUp") ? PASO : -PASO));
+            int v = getVolume();
+            if (v == 0 && antesMute > 0) v = antesMute;  // subir/bajar desde el silencio parte del volumen previo
+            antesMute = -1;
+            setVolume(v + (k.equals("VolumeUp") ? PASO : -PASO));
             return;
         }
         throw new DriverError("Esta TV solo admite volumen por red (teclas y apagado: pendiente)");
     }
 
     @Override synchronized JSONObject estado() throws Exception {
-        return new JSONObject().put("volume", getVolume()).put("muted", antesMute >= 0);
+        int v = getVolume();
+        return new JSONObject().put("volume", v).put("muted", v == 0);
     }
 
     @Override JSONArray apps() {

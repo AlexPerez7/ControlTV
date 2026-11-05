@@ -149,10 +149,18 @@ public class MainActivity extends Activity {
     public boolean onKeyDown(int codigo, android.view.KeyEvent ev) {
         if (tvConVolumen && (codigo == android.view.KeyEvent.KEYCODE_VOLUME_UP || codigo == android.view.KeyEvent.KEYCODE_VOLUME_DOWN)) {
             String k = codigo == android.view.KeyEvent.KEYCODE_VOLUME_UP ? "VolumeUp" : "VolumeDown";
-            web.evaluateJavascript("key('" + k + "')", null);
+            web.evaluateJavascript("teclaFisica('" + k + "')", null);  // con freno: mantener no acumula peticiones
             return true;
         }
         return super.onKeyDown(codigo, ev);
+    }
+
+    @Override
+    public boolean onKeyUp(int codigo, android.view.KeyEvent ev) {
+        if (tvConVolumen && (codigo == android.view.KeyEvent.KEYCODE_VOLUME_UP || codigo == android.view.KeyEvent.KEYCODE_VOLUME_DOWN)) {
+            return true;  // el celular no debe cambiar su propio volumen al soltar
+        }
+        return super.onKeyUp(codigo, ev);
     }
 
     @Override

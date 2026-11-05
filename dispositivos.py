@@ -4,13 +4,15 @@ Para agregar una marca nueva: crea una subclase de Driver, implementa `probe` (d
 automatica, opcional) y los metodos que soporte, y anadela a DRIVERS al final del archivo.
 Cada driver declara en `caps` lo que puede hacer: keys, text, apps, volume.
 """
+import base64
+import datetime
 import hashlib
 import json
 import os
 import re
+import secrets
 import socket
 import ssl
-import subprocess
 import threading
 import time
 import unicodedata
@@ -180,10 +182,11 @@ class Hisense(Driver):
         return r.decode("utf-8", "replace")
 
     def online(self):
+        # Solo el puerto: GetVolume da 401 hasta aceptar el permiso en la TV, y la TV no estaria "desconectada"
         try:
-            self.get_volume()
+            socket.create_connection((self.ip, 9085), timeout=1.5).close()
             return True
-        except Exception:
+        except OSError:
             return False
 
     def get_volume(self) -> int:
@@ -198,25 +201,31 @@ class Hisense(Driver):
         self._soap("SetVolume", f"<DesiredVolume>{v}</DesiredVolume>")
         self._vol = v
 
+    VOL_SIN_MUTE = 10  # al quitar el silencio sin saber el volumen anterior (p. ej. tras reiniciar el servidor)
+
     def key(self, k):
+        # Siempre se lee el volumen actual: el control fisico de la TV tambien lo cambia. Volumen 0 = silenciado.
         if k == "VolumeMute":
-            if self._antes_mute is None:
-                self._antes_mute = self.get_volume()
-                self.set_volume(0)
+            v = self.get_volume()
+            if v == 0:
+                self.set_volume(self._antes_mute or self.VOL_SIN_MUTE)
+                self._antes_mute = None
             else:
-                v, self._antes_mute = self._antes_mute, None
-                self.set_volume(v)
+                self._antes_mute = v
+                self.set_volume(0)
             return
         if k in ("VolumeUp", "VolumeDown"):
-            if self._antes_mute is not None:  # subir/bajar cancela el mute emulado
-                self._vol, self._antes_mute = self._antes_mute, None
-            base = self._vol if self._vol is not None else self.get_volume()
-            self.set_volume(base + (self.PASO if k == "VolumeUp" else -self.PASO))
+            v = self.get_volume()
+            if v == 0 and self._antes_mute:  # subir/bajar desde el silencio parte del volumen previo
+                v = self._antes_mute
+            self._antes_mute = None
+            self.set_volume(v + (self.PASO if k == "VolumeUp" else -self.PASO))
             return
         raise DriverError("Esta TV solo admite volumen por red (teclas y apagado: pendiente)")
 
     def estado(self):
-        return {"volume": self.get_volume(), "muted": self._antes_mute is not None}
+        v = self.get_volume()
+        return {"volume": v, "muted": v == 0}
 
     def apps(self):
         res = []
@@ -360,6 +369,103 @@ def _hijos_raiz(der):
     return c
 
 
+# --- Certificado de cliente sin openssl (Windows no lo trae) -----------------------
+# RSA y X.509 minimos en Python puro: solo se usa una vez, para crear androidtv_cert.pem/androidtv_clave.pem.
+_PRIMOS_CHICOS = [p for p in range(3, 2000, 2) if all(p % q for q in range(3, int(p ** .5) + 1, 2))]
+
+
+def _es_primo(n, rondas=40):
+    """Miller-Rabin (probabilidad de error < 4^-40)."""
+    if n < 2 or n % 2 == 0:
+        return n == 2
+    for p in _PRIMOS_CHICOS:
+        if n % p == 0:
+            return n == p
+    d, r = n - 1, 0
+    while d % 2 == 0:
+        d, r = d // 2, r + 1
+    for _ in range(rondas):
+        x = pow(2 + secrets.randbelow(n - 3), d, n)
+        if x in (1, n - 1):
+            continue
+        for _ in range(r - 1):
+            x = pow(x, 2, n)
+            if x == n - 1:
+                break
+        else:
+            return False
+    return True
+
+
+def _primo(bits, e):
+    while True:
+        p = secrets.randbits(bits) | (3 << (bits - 2)) | 1  # dos bits altos: n tiene exactamente 2*bits
+        if p % e != 1 and _es_primo(p):
+            return p
+
+
+def _der_tlv(tag, contenido):
+    n = len(contenido)
+    largo = bytes([n]) if n < 0x80 else bytes([0x80 | ((n.bit_length() + 7) // 8)]) + n.to_bytes((n.bit_length() + 7) // 8, "big")
+    return bytes([tag]) + largo + contenido
+
+
+def _der_int(n):
+    return _der_tlv(0x02, n.to_bytes(n.bit_length() // 8 + 1, "big"))  # +1 byte: nunca negativo
+
+
+def _der_seq(*partes):
+    return _der_tlv(0x30, b"".join(partes))
+
+
+def _der_oid(texto):
+    a, b, *resto = map(int, texto.split("."))
+    out = bytes([40 * a + b])
+    for v in resto:
+        grupo = [v & 0x7F]
+        while v > 0x7F:
+            v >>= 7
+            grupo.append(0x80 | (v & 0x7F))
+        out += bytes(reversed(grupo))
+    return _der_tlv(0x06, out)
+
+
+def _pem(tipo, der):
+    b = base64.b64encode(der).decode()
+    return f"-----BEGIN {tipo}-----\n" + "\n".join(b[i:i + 64] for i in range(0, len(b), 64)) + f"\n-----END {tipo}-----\n"
+
+
+def certificado_autofirmado(cn="ControlTV", bits=2048, dias=3650):
+    """(cert_pem, clave_pem): RSA `bits` + X.509 v3 autofirmado con SHA-256, como `openssl req -x509 -newkey rsa`."""
+    e = 65537
+    while True:
+        p, q = _primo(bits // 2, e), _primo(bits // 2, e)
+        if p != q:
+            break
+    n, fi = p * q, (p - 1) * (q - 1)
+    d = pow(e, -1, fi)
+    rsa_alg = _der_seq(_der_oid("1.2.840.113549.1.1.1"), b"\x05\x00")
+    firma_alg = _der_seq(_der_oid("1.2.840.113549.1.1.11"), b"\x05\x00")  # sha256WithRSAEncryption
+    nombre = _der_seq(_der_tlv(0x31, _der_seq(_der_oid("2.5.4.3"), _der_tlv(0x0C, cn.encode()))))
+    ahora = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+    hora = lambda t: _der_tlv(0x17, t.strftime("%y%m%d%H%M%SZ").encode())  # UTCTime: vale hasta 2049
+    tbs = _der_seq(
+        _der_tlv(0xA0, _der_int(2)),  # version v3
+        _der_int(secrets.randbits(63) | 1),
+        firma_alg, nombre,
+        _der_seq(hora(ahora - datetime.timedelta(days=1)), hora(ahora + datetime.timedelta(days=dias))),
+        nombre,
+        _der_seq(rsa_alg, _der_tlv(0x03, b"\x00" + _der_seq(_der_int(n), _der_int(e)))))
+    info = bytes.fromhex("3031300d060960864801650304020105000420") + hashlib.sha256(tbs).digest()  # DigestInfo SHA-256
+    k = (n.bit_length() + 7) // 8
+    em = b"\x00\x01" + b"\xff" * (k - len(info) - 3) + b"\x00" + info  # PKCS#1 v1.5
+    firma = pow(int.from_bytes(em, "big"), d, n).to_bytes(k, "big")
+    cert = _der_seq(tbs, firma_alg, _der_tlv(0x03, b"\x00" + firma))
+    pkcs1 = _der_seq(*map(_der_int, (0, n, e, d, p, q, d % (p - 1), d % (q - 1), pow(q, -1, p))))
+    pkcs8 = _der_seq(_der_int(0), rsa_alg, _der_tlv(0x04, pkcs1))
+    return _pem("CERTIFICATE", cert), _pem("PRIVATE KEY", pkcs8)
+
+
 class AndroidTV(Driver):
     marca = "Android TV"
     PUERTO_PAIR, PUERTO_REMOTE = 6467, 6466
@@ -396,6 +502,7 @@ class AndroidTV(Driver):
         self._pair_desde = 0.0  # cuando se mostro el codigo en la TV (caduca a los 2 min)
         self._ime = (0, 0)  # contadores (ime, campo) de la ultima edicion de texto que informo la TV
         self._vol = None  # (nivel, maximo, silenciado) segun la ultima notificacion de la TV
+        self._fallo_hasta = 0.0  # tras fallar al conectar, las teclas fallan al instante hasta este momento
 
     @property
     def caps(self):  # sin red: el estado lo fija preparar() al escanear
@@ -434,12 +541,14 @@ class AndroidTV(Driver):
             if os.path.exists(cls.CERT) and os.path.exists(cls.CLAVE):
                 return
             try:
-                subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "3650",
-                                "-subj", "/CN=ControlTV", "-keyout", cls.CLAVE, "-out", cls.CERT],
-                               check=True, capture_output=True, timeout=60)
-                os.chmod(cls.CLAVE, 0o600)
-            except (OSError, subprocess.SubprocessError):
-                raise DriverError("No se pudo crear el certificado: instala 'openssl'")
+                cert, clave = certificado_autofirmado()
+                fd = os.open(cls.CLAVE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                with os.fdopen(fd, "w") as f:
+                    f.write(clave)
+                with open(cls.CERT, "w") as f:
+                    f.write(cert)
+            except OSError as e:
+                raise DriverError(f"No se pudo guardar el certificado: {e}")
 
     def _conectar(self, puerto, espera=5):
         self._asegurar_cert()
@@ -597,16 +706,20 @@ class AndroidTV(Driver):
             self._enviar_msg(s, datos)
 
     ESPERA_TECLADO = 0.4
+    ESPERA_TRAS_FALLO = 3.0
 
     def _asegurar_conexion(self):
         with self._conn:
             if self._sock is not None and self._listo.is_set():
                 return self._sock
+            if time.time() < self._fallo_hasta:  # no esperar otro timeout por cada tecla en cola
+                raise DriverError(f"{self.nombre} no responde (¿está encendida?)")
             self._listo.clear()
             try:
                 s = self._conectar(self.PUERTO_REMOTE)
             except OSError:
-                raise DriverError(f"{self.nombre} no responde (¿esta encendida?)")
+                self._fallo_hasta = time.time() + self.ESPERA_TRAS_FALLO
+                raise DriverError(f"{self.nombre} no responde (¿está encendida?)")
             self._sock = s
             threading.Thread(target=self._lector, args=(s,), daemon=True).start()
             if not self._listo.wait(6):

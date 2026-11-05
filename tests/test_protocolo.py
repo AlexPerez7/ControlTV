@@ -57,6 +57,37 @@ class Certificados(unittest.TestCase):
             self.assertEqual(e, b"\x01\x00\x01")  # 65537
 
 
+class CertificadoPropio(unittest.TestCase):
+    """certificado_autofirmado() reemplaza a `openssl req` (Windows no lo trae)."""
+    @classmethod
+    def setUpClass(cls):
+        cls.cert, cls.clave = d.certificado_autofirmado()
+
+    def test_python_lo_carga_como_certificado_de_cliente(self):
+        with tempfile.TemporaryDirectory() as t:
+            c, k = os.path.join(t, "c.pem"), os.path.join(t, "k.pem")
+            open(c, "w").write(self.cert)
+            open(k, "w").write(self.clave)
+            ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT).load_cert_chain(c, k)  # falla si la clave no corresponde al cert
+
+    def test_rsa_2048_con_exponente_65537(self):
+        n, e = d._rsa_de_cert(ssl.PEM_cert_to_DER_cert(self.cert))
+        self.assertEqual(len(n) * 8, 2048)
+        self.assertEqual(e, b"\x01\x00\x01")
+
+    @unittest.skipUnless(shutil.which("openssl"), "falta openssl")
+    def test_openssl_verifica_la_firma(self):
+        with tempfile.TemporaryDirectory() as t:
+            c = os.path.join(t, "c.pem")
+            open(c, "w").write(self.cert)
+            r = subprocess.run(["openssl", "verify", "-CAfile", c, c], capture_output=True, text=True)
+            self.assertIn("OK", r.stdout, r.stderr)
+
+    def test_primos(self):
+        self.assertTrue(all(d._es_primo(p) for p in (2, 3, 65537, 2 ** 61 - 1)))
+        self.assertFalse(any(d._es_primo(n) for n in (0, 1, 4, 561, 2 ** 61 + 1)))  # 561: Carmichael
+
+
 class Emparejamiento(unittest.TestCase):
     def tv(self):
         return d.AndroidTV("192.0.2.1")
@@ -216,3 +247,39 @@ class Emparejamiento(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HisenseVolumen(unittest.TestCase):
+    """Mute emulado: volumen 0 = silenciado, y siempre se parte del volumen real (el control fisico tambien lo cambia)."""
+    def setUp(self):
+        self.tv = d.Hisense("192.0.2.1")
+        self.vol = 12
+        self.tv.get_volume = lambda: self.vol
+        self.tv.set_volume = lambda v: setattr(self, "vol", max(0, min(100, v)))
+
+    def test_silenciar_y_restaurar(self):
+        self.tv.key("VolumeMute")
+        self.assertEqual((self.vol, self.tv.estado()["muted"]), (0, True))
+        self.tv.key("VolumeMute")
+        self.assertEqual((self.vol, self.tv.estado()["muted"]), (12, False))
+
+    def test_subir_desde_el_silencio_parte_del_volumen_previo(self):
+        self.tv.key("VolumeMute")
+        self.tv.key("VolumeUp")
+        self.assertEqual(self.vol, 14)
+
+    def test_cambio_con_el_control_fisico(self):
+        self.tv.key("VolumeMute")
+        self.vol = 7  # alguien subio el volumen con el control de la TV
+        self.assertFalse(self.tv.estado()["muted"])
+        self.tv.key("VolumeDown")
+        self.assertEqual(self.vol, 5)
+        self.tv.key("VolumeMute")
+        self.assertEqual(self.vol, 0)
+        self.tv.key("VolumeMute")
+        self.assertEqual(self.vol, 5)
+
+    def test_silenciada_sin_volumen_previo_conocido(self):
+        self.vol = 0  # p. ej. tras reiniciar el servidor
+        self.tv.key("VolumeMute")
+        self.assertEqual(self.vol, d.Hisense.VOL_SIN_MUTE)

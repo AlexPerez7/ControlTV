@@ -35,8 +35,24 @@ final class Api {
 
     private static final Response OK = new Response(200, "text/plain", new byte[0]);
 
-    /** La red (descubrir, preparar) va fuera del lock: mientras escanea, las teclas siguen funcionando. */
+    /** Un solo barrido a la vez: si llega otro (p. ej. "Buscar" durante el escaneo inicial), espera y usa ese resultado. */
+    private final java.util.concurrent.locks.ReentrantLock escaneo = new java.util.concurrent.locks.ReentrantLock();
+
     int escanear() {
+        if (!escaneo.tryLock()) {
+            escaneo.lock();  // espera a que termine el que esta en curso
+            escaneo.unlock();
+            synchronized (this) { return dispositivos.size(); }
+        }
+        try {
+            return escanearAhora();
+        } finally {
+            escaneo.unlock();
+        }
+    }
+
+    /** La red (descubrir, preparar) va fuera del lock: mientras escanea, las teclas siguen funcionando. */
+    private int escanearAhora() {
         List<Driver> nuevos = Discovery.descubrir();
         Map<String, Driver> mapa = new LinkedHashMap<>();
         for (Driver d : nuevos) mapa.put(d.id(), d);
