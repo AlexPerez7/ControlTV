@@ -92,6 +92,8 @@ Se extrajo y analizo con REA (`rea`, JADX) lo que hay en el movil; ningun protoc
 - La TV no acepta comandos por red. Canal SmartCenter (`:56789`) → 404, WebSocket `:7681` → 403, UDP `:4950` sin
   respuesta, WebSocket `:3697` acepta conexion pero ignora todo (37 variantes de Vol+ probadas).
 - Causa probable: falta la opcion **"Virtual Remote"** en este firmware. El driver `Vestel` conserva los codigos de la app oficial.
+- **Descubierto el 5-nov-2026:** la onn **no tiene Bluetooth** (no hay apartado en sus ajustes) y su puerto USB es solo para periféricos (el PC no la ve por USB). Un **teclado USB inalámbrico (Logitech K400 Plus) sí funciona**: las flechas navegan por Ajustes y las teclas de volumen suben/bajan el volumen. Sin probar: Enter, Esc, Inicio, Silencio, Play y si algo la enciende desde reposo.
+  **Vía posible, descartada por ahora (sin presupuesto):** una Raspberry Pi Pico W (~5-8 USD) enchufada al USB de la TV como teclado HID, controlada por Wi-Fi (`POST /key/<Tecla>`, `/text`), con un driver `Teclado` en Python y Java y un puerto propio en los barridos de red. Alternativas que también necesitan hardware: emisor IR por Wi-Fi (Broadlink) o un adaptador HDMI-CEC.
 
 ## Pendientes
 
