@@ -21,6 +21,8 @@ Todo funciona dentro de tu red WiFi; no usa internet ni nube.
    Guarda la última lista: la próxima vez abre al instante con tus dispositivos y reescanea en segundo plano.
 4. **Android TV:** la primera vez, pulsa "Mostrar código en la TV" y escribe en la app el código de 6 caracteres que aparece en la pantalla. Se hace una vez por celular.
 
+**Actualizar:** desde la versión 1.5 la app avisa cuando hay un Release nuevo; en *Ajustes y actualización* pulsa **Actualizar** (descarga el APK, comprueba su SHA-256 y Android pide confirmar). La primera vez permite que Control TV instale apps.
+
 Requiere Android 8 o superior.
 
 ## Usar el servidor en el PC

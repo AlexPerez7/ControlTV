@@ -169,7 +169,47 @@ public class MainActivity extends Activity {
         hiloVoz.start();
     }
 
+    private volatile boolean actualizando;
+
+    private void js(String f, String txt, boolean err) {
+        runOnUiThread(() -> web.evaluateJavascript(f + "(" + org.json.JSONObject.quote(txt) + "," + err + ")", null));
+    }
+
+    private void buscarActualizacion(final boolean silencioso) {
+        new Thread(() -> {
+            try {
+                js("actualizacionInfo", Actualizador.buscar(getApplicationContext()).toString(), false);
+            } catch (Exception e) {
+                if (!silencioso) js("actualizacionInfo", "No se pudo consultar: " + (e instanceof Driver.DriverError ? e.getMessage() : "sin conexión a internet"), true);
+            }
+        }).start();
+    }
+
+    private void instalarActualizacion() {
+        if (actualizando) return;
+        actualizando = true;
+        new Thread(() -> {
+            try {
+                Actualizador.actualizar(getApplicationContext(), (t, err) -> js("actualizacionEstado", t, err));
+            } catch (Exception e) {
+                android.util.Log.e("Actualizador", "fallo al actualizar", e);
+                js("actualizacionEstado", e instanceof Driver.DriverError ? e.getMessage() : "Error al actualizar: " + e, true);
+            } finally {
+                actualizando = false;
+            }
+        }).start();
+    }
+
     private final class Puente {
+        @android.webkit.JavascriptInterface
+        public String version() { return Actualizador.versionActual(getApplicationContext()); }
+
+        @android.webkit.JavascriptInterface
+        public void buscarActualizacion(boolean silencioso) { MainActivity.this.buscarActualizacion(silencioso); }
+
+        @android.webkit.JavascriptInterface
+        public void actualizar() { instalarActualizacion(); }
+
         @android.webkit.JavascriptInterface
         public void vozIniciar(String id) { vozEmpezar(id); }
 

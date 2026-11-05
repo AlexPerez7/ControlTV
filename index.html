@@ -22,6 +22,7 @@
            transition:transform .06s, background .1s; touch-action:manipulation; }
   button:active, button.on { transform:scale(.94); background:var(--btn2); }
   .row { display:grid; gap:12px; margin-bottom:12px; }
+  .solo-app { display:none; } body.en-app .solo-app { display:block; }
   .c2 { grid-template-columns:1fr 1fr; } .c4 { grid-template-columns:repeat(4,1fr); } .c3 { grid-template-columns:1fr 1fr 1fr; }
   .power { background:var(--red); width:56px; border-radius:50%; font-size:22px; }
   .pad { position:relative; width:260px; height:260px; margin:12px auto 18px; border-radius:50%; background:var(--btn); }
@@ -206,6 +207,17 @@
     <div class="apps" id="apps"></div>
   </details>
 
+  <details id="detAjustes" class="solo-app">
+    <summary><svg class="ic" aria-hidden="true"><use href="#i-keyboard"/></svg> Ajustes y actualización</summary>
+    <div class="lbl">Versión instalada: <span id="verActual">?</span></div>
+    <div class="row c2">
+      <button id="buscarAct">Buscar actualizaciones</button>
+      <button id="instalarAct" style="display:none;background:var(--acc)">Actualizar</button>
+    </div>
+    <div class="lbl" id="actEstado" aria-live="polite" style="margin-top:8px"></div>
+    <div class="compurl" id="actNotas" style="display:none;white-space:pre-wrap"></div>
+  </details>
+
   <small class="help">
     Controla tus dispositivos por WiFi: el celular debe estar en la misma red que ellos (con el servidor del PC, el PC también).
     Elige el dispositivo arriba; los botones cambian según lo que soporte cada marca.
@@ -337,6 +349,28 @@ document.addEventListener('pointerup', e => { if (e.target.closest('[data-k]')) 
 const NOMBRE_TECLA = { Up: 'Arriba', Down: 'Abajo', Left: 'Izquierda', Right: 'Derecha', Select: 'OK', Back: 'Atrás', Home: 'Inicio', VolumeUp: 'Volumen +', VolumeDown: 'Volumen −', VolumeMute: 'Silencio', Play: 'Reproducir/Pausa', Rev: 'Retroceder', Fwd: 'Avanzar', Info: 'Info', Stop: 'Detener', Red: 'Rojo', Green: 'Verde', Yellow: 'Amarillo', Blue: 'Azul', PowerOff: 'Apagar', Power: 'Encender' };
 if (window.App && App.vozIniciar) document.body.classList.add('en-app');
 function vozEstado(t, err) { setEstado(t, err); }
+// Actualizaciones (solo en la app): GitHub Releases
+function actualizacionEstado(t, err) { setEstado(t, err); const e = document.getElementById('actEstado'); e.textContent = t; e.style.color = err ? '#ff8a80' : ''; }
+function actualizacionInfo(txt, err) {
+  const b = document.getElementById('instalarAct'), n = document.getElementById('actNotas');
+  if (err) { setEstado(txt, true); return; }
+  const r = JSON.parse(txt);
+  document.getElementById('verActual').textContent = r.actual;
+  b.style.display = r.hay ? '' : 'none';
+  n.style.display = r.hay ? '' : 'none';
+  if (r.hay) {
+    b.textContent = 'Actualizar a ' + r.ultima;
+    n.textContent = 'Novedades de ' + r.ultima + ':\n' + r.notas.replace(/\*\*/g, '').replace(/^#+\s*/gm, '').replace(/`/g, '');
+    setEstado('Hay una versión nueva: ' + r.ultima + ' (en Ajustes)');
+    document.getElementById('detAjustes').open = true;
+  } else setEstado('✓ Ya tienes la última versión (' + r.actual + ')');
+}
+if (window.App && App.buscarActualizacion) {
+  document.getElementById('verActual').textContent = App.version();
+  document.getElementById('buscarAct').addEventListener('click', () => { setEstado('Buscando actualizaciones...'); App.buscarActualizacion(false); });
+  document.getElementById('instalarAct').addEventListener('click', () => App.actualizar());
+  setTimeout(() => App.buscarActualizacion(true), 1500);  // al abrir: avisa solo si hay una nueva
+}
 (function () {
   const b = document.getElementById('voz');
   let activo = false;

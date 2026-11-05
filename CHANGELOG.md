@@ -2,6 +2,14 @@
 
 Cada versión nueva debe tener aquí su sección `## X.Y` (el workflow de Release la usa como descripción y falla si falta).
 
+## 1.5
+
+### Novedades
+- **Actualizaciones desde la app** (Android): al abrir, la app consulta los Releases de GitHub y avisa si hay una versión nueva. En **Ajustes y actualización** se ve la versión instalada, **Buscar actualizaciones** y **Actualizar a X** con las novedades de esa versión. La descarga se verifica con su SHA-256 y Android pide confirmar la instalación (solo acepta un APK con la misma firma). La primera vez hay que permitir que Control TV instale apps.
+
+### Interno
+- Permiso `REQUEST_INSTALL_PACKAGES` y nueva clase `Actualizador` (`PackageInstaller`).
+
 ## 1.4
 
 ### Novedades
