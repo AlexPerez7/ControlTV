@@ -49,7 +49,7 @@ final class Discovery {
     }
 
     /** Puertos de cada driver, en el orden en que se intenta identificar un dispositivo. */
-    private static final int[] PUERTOS = {Roku.PROBE_PORT, Hisense.PROBE_PORT, AndroidTV.PROBE_PORT};
+    private static final int[] PUERTOS = {Roku.PROBE_PORT, Hisense.PROBE_PORT, AndroidTV.PUERTO_PAIR};
 
     private static Driver identificar(String ip, int puerto) {
         if (puerto == Roku.PROBE_PORT) return Roku.probe(ip);

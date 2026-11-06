@@ -686,11 +686,11 @@ class AndroidTV(Driver):
 
     @classmethod
     def probe(cls, ip):
-        for p in (cls.PUERTO_PAIR, cls.PUERTO_REMOTE):
-            try:
-                socket.create_connection((ip, p), timeout=1.5).close()
-            except OSError:
-                return None
+        # Solo el de emparejamiento: un connect sin TLS al de control la TV lo anota como "unknown device".
+        try:
+            socket.create_connection((ip, cls.PUERTO_PAIR), timeout=1.5).close()
+        except OSError:
+            return None
         nombre, udn = cls._info_cast(ip)
         d = cls(ip, "", nombre)
         d.uid = udn
@@ -865,8 +865,9 @@ class AndroidTV(Driver):
         # de golpe el socket puede seguir "abierto", por eso cuenta el ultimo mensaje y no solo que exista.
         if self._sock is not None and self._listo.is_set() and time.time() - self._ultimo_msg < self.VIVA:
             return True
+        # Puerto de emparejamiento y no el de control: alli un connect sin TLS sale como "unknown device" en el log de la TV.
         try:
-            socket.create_connection((self.ip, self.PUERTO_REMOTE), timeout=1.5).close()
+            socket.create_connection((self.ip, self.PUERTO_PAIR), timeout=1.5).close()
             return True
         except OSError:
             return False
@@ -1167,7 +1168,7 @@ def descubrir(ip_local: str, extra_ips=()) -> list:
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(2) as ex:  # SSDP y barrido de puertos a la vez
         a = ex.submit(ssdp_ips, ip_local)
-        b = ex.submit(puerto_abierto, ip_local, AndroidTV.PUERTO_REMOTE)
+        b = ex.submit(puerto_abierto, ip_local, AndroidTV.PUERTO_PAIR)
         ips = a.result() | b.result() | set(extra_ips)
 
     def identificar(ip):

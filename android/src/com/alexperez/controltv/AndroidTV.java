@@ -37,7 +37,8 @@ import javax.net.ssl.X509TrustManager;
  */
 final class AndroidTV extends Driver {
     static final int PROBE_PORT = 6466;
-    private static final int PUERTO_PAIR = 6467;
+    /** Tambien para saber si la TV esta encendida: un connect sin TLS al de control sale como "unknown device" en su log. */
+    static final int PUERTO_PAIR = 6467;
     private static final String ALIAS_CLAVE = "controltv-androidtv-3";  // subir el sufijo si cambian los permisos de la clave: la anterior no se modifica
 
     /** Lo asigna MainActivity. */
@@ -95,8 +96,9 @@ final class AndroidTV extends Driver {
      *  Si la TV no contesta (apagada) se conserva lo guardado; si contesta y nos cierra, hay que emparejar de nuevo. */
     @Override void preparar() {
         if (listo) return;  // ya hay una conexion viva
+        // Se sondea el puerto de emparejamiento: un connect sin TLS al de control la TV lo anota como "unknown device".
         try (Socket tcp = new Socket()) {
-            tcp.connect(new InetSocketAddress(ip, PROBE_PORT), 1500);
+            tcp.connect(new InetSocketAddress(ip, PUERTO_PAIR), 1500);
         } catch (Exception apagada) {
             return;
         }
@@ -394,8 +396,9 @@ final class AndroidTV extends Driver {
         // Conexion de control viva y la TV hablo hace poco (manda pings): sin tocar la red. Si la TV se apaga de golpe
         // el socket puede seguir "abierto", por eso cuenta el ultimo mensaje y no solo que exista.
         if (sock != null && listo && System.currentTimeMillis() - ultimoMsg < 12000) return true;
+        // Puerto de emparejamiento y no el de control: alli un connect sin TLS sale como "unknown device" en el log de la TV.
         try (Socket s = new Socket()) {
-            s.connect(new InetSocketAddress(ip, PROBE_PORT), 1500);
+            s.connect(new InetSocketAddress(ip, PUERTO_PAIR), 1500);
             return true;
         } catch (Exception e) {
             return false;

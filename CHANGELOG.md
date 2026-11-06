@@ -2,6 +2,11 @@
 
 Cada versión nueva debe tener aquí su sección `## X.Y` (el workflow de Release la usa como descripción y falla si falta).
 
+## 1.10
+
+### Correcciones
+- **Android TV: comprobaciones sin falsos "dispositivo desconocido".** Para saber si la TV está encendida (escaneo, estado) la app y el servidor hacían una conexión simple al puerto de control (6466), y la TV la anotaba en su log como "unknown device", el mismo aviso que sale cuando olvida el emparejamiento. Ahora esas comprobaciones usan el puerto de emparejamiento (6467), así que ese aviso solo aparece cuando la TV rechaza de verdad al celular. La conexión de control y el encendido por Wake-on-LAN no cambian.
+
 ## 1.9
 
 ### Interno
