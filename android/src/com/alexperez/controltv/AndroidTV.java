@@ -91,8 +91,24 @@ final class AndroidTV extends Driver {
     /** Estado guardado del ultimo escaneo; si ya no vale, la primera tecla falla y preparar() lo corrige al reescanear. */
     void restaurarPareado(boolean si) { pareado = si; }
 
+    /** Revalida el emparejamiento en cada escaneo: la TV puede haberlo olvidado aunque lo guardado diga que si.
+     *  Si la TV no contesta (apagada) se conserva lo guardado; si contesta y nos cierra, hay que emparejar de nuevo. */
     @Override void preparar() {
-        if (!pareado) pareado = comprobarPareado();
+        if (listo) return;  // ya hay una conexion viva
+        try (Socket tcp = new Socket()) {
+            tcp.connect(new InetSocketAddress(ip, PROBE_PORT), 1500);
+        } catch (Exception apagada) {
+            return;
+        }
+        SSLSocket s = null;
+        try {
+            s = conectar(PROBE_PORT, 3000);
+            pareado = leer(leerMsg(s)).containsKey(1);
+        } catch (Exception rechazada) {  // el puerto abre pero la TV cierra (o falla el TLS): no nos reconoce
+            pareado = false;
+        } finally {
+            cerrar(s);
+        }
     }
 
     static AndroidTV probe(String ip) {
@@ -272,19 +288,6 @@ final class AndroidTV extends Driver {
     }
 
     // ---- emparejamiento ------------------------------------------------------------------
-    /** Pareado = la TV nos habla (envia su configuracion) al conectar al puerto de control. */
-    private boolean comprobarPareado() {
-        SSLSocket s = null;
-        try {
-            s = conectar(PROBE_PORT, 3000);
-            return leer(leerMsg(s)).containsKey(1);
-        } catch (Exception e) {
-            return false;
-        } finally {
-            cerrar(s);
-        }
-    }
-
     @Override synchronized void pair(String arg) throws Exception {
         if (arg.equals("start")) pairInicio(); else pairCodigo(arg);
     }

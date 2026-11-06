@@ -2,6 +2,11 @@
 
 Cada versión nueva debe tener aquí su sección `## X.Y` (el workflow de Release la usa como descripción y falla si falta).
 
+## 1.8
+
+### Correcciones
+- **Android TV: "no responde" cuando la TV olvida el emparejamiento.** Si la TV dejaba de reconocer el celular (por ejemplo tras reiniciarla), la app seguía creyéndolo emparejado y solo decía "no responde". Ahora revisa el emparejamiento en cada escaneo: si la TV está encendida pero nos rechaza, muestra "Esta TV necesita emparejarse" para volver a hacerlo con el código; si la TV está apagada, conserva lo guardado.
+
 ## 1.7
 
 ### Novedades
