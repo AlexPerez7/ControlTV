@@ -2,6 +2,11 @@
 
 Cada versión nueva debe tener aquí su sección `## X.Y` (el workflow de Release la usa como descripción y falla si falta).
 
+## 1.9
+
+### Interno
+- **Diagnóstico del emparejamiento de Android TV:** la app registra en el log (`adb logcat -s ControlTV`) la huella del certificado de este celular y si la clave es nueva o ya existía. Sirve para saber, cuando una TV olvida el emparejamiento, si el cambio vino del celular o de la TV. No cambia el comportamiento.
+
 ## 1.8
 
 ### Correcciones

@@ -203,8 +203,12 @@ final class AndroidTV extends Driver {
             ks.load(null);
             // El gestor de claves usa el primer alias que encuentra: solo debe quedar la clave vigente.
             for (String alias : java.util.Collections.list(ks.aliases())) if (!alias.equals(ALIAS_CLAVE)) ks.deleteEntry(alias);
-            if (!ks.containsAlias(ALIAS_CLAVE)) generarClave();
+            boolean nueva = !ks.containsAlias(ALIAS_CLAVE);
+            if (nueva) generarClave();
             certCliente = (X509Certificate) ks.getCertificate(ALIAS_CLAVE);
+            // Diagnostico: si la TV olvida el emparejamiento, esta huella dice si la clave del celular cambio (adb logcat -s ControlTV).
+            android.util.Log.i("ControlTV", "certificado del celular sha256=" + huella(certCliente)
+                    + (nueva ? " (clave NUEVA generada ahora)" : " (clave existente)") + " desde=" + certCliente.getNotBefore());
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             kmf.init(ks, null);
             // La TV usa un certificado propio: no se valida (el emparejamiento por codigo es la autenticacion).
@@ -218,6 +222,17 @@ final class AndroidTV extends Driver {
             ssl = c;
         }
         return ssl;
+    }
+
+    private static String huella(X509Certificate c) {
+        try {
+            byte[] h = java.security.MessageDigest.getInstance("SHA-256").digest(c.getEncoded());
+            StringBuilder b = new StringBuilder();
+            for (int i = 0; i < 8; i++) b.append(String.format("%02x", h[i]));  // 8 bytes bastan para comparar
+            return b.toString();
+        } catch (Exception e) {
+            return "?";
+        }
     }
 
     /** Crea la clave del celular en el Keystore (hardware si existe). El certificado autofirmado lo emite el propio Keystore. */
